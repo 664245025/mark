@@ -25,6 +25,11 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+st.set_page_config(
+    page_title="GraphBook Recommender",
+    page_icon="025.png",  # ชื่อไฟล์รูปภาพของคุณที่อัปขึ้น GitHub
+    initial_sidebar_state="expanded",
+)
 st.markdown(
     """
     <style>
@@ -234,3 +239,4 @@ elif page == "Admin / Setup":
             seed_demo_data()
         st.success("สร้างข้อมูลตัวอย่างเรียบร้อยแล้ว")
         st.rerun()
+        
