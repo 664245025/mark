@@ -144,6 +144,70 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+def relationship_graph(user_id: str, place_id: str | None = None) -> str:
+    from neo4j_service import query
+
+    if place_id:
+        rows = query(
+            """
+            MATCH (me:User {user_id:$user_id})
+            MATCH (me)-[:FRIEND_OF]-(friend:User)-[:VISITED]->(place:Place {place_id:$place_id})
+            RETURN me.user_id AS me_id, me.name AS me_name,
+                   friend.user_id AS friend_id, friend.name AS friend_name,
+                   place.place_id AS place_id, place.name AS place_name
+            ORDER BY friend.name
+            """,
+            {"user_id": user_id, "place_id": place_id},
+        )
+    else:
+        rows = query(
+            """
+            MATCH (me:User {user_id:$user_id})
+            OPTIONAL MATCH (me)-[:FRIEND_OF]-(friend:User)
+            OPTIONAL MATCH (friend)-[:VISITED]->(place:Place)
+            RETURN me.user_id AS me_id, me.name AS me_name,
+                   friend.user_id AS friend_id, friend.name AS friend_name,
+                   place.place_id AS place_id, place.name AS place_name
+            ORDER BY friend.name, place.name
+            LIMIT 40
+            """,
+            {"user_id": user_id},
+        )
+
+    dot = [
+        "digraph G {",
+        'rankdir="LR";',
+        'graph [pad="0.3", nodesep="0.55", ranksep="0.8"];',
+        'node [shape=box, style="rounded,filled", fontname="Arial"];',
+    ]
+
+    seen = set()
+
+    for r in rows:
+        me = r["me_id"]
+        friend = r.get("friend_id")
+        place = r.get("place_id")
+
+        if me not in seen:
+            dot.append(f'"{me}" [label="👤 {r["me_name"]}\\n{me}"];')
+            seen.add(me)
+
+        if friend:
+            if friend not in seen:
+                dot.append(f'"{friend}" [label="👤 {r["friend_name"]}\\n{friend}"];')
+                seen.add(friend)
+            dot.append(f'"{me}" -> "{friend}" [label="FRIEND_OF"];')
+
+        if friend and place:
+            if place not in seen:
+                dot.append(f'"{place}" [label="📍 {r["place_name"]}\\n{place}"];')
+                seen.add(place)
+            dot.append(f'"{friend}" -> "{place}" [label="VISITED"];')
+
+    dot.append("}")
+    return "\n".join(dot)
+
+
 if page == "Dashboard":
     st.subheader("📊 ภาพรวมระบบ")
     m = get_dashboard_metrics()
@@ -181,34 +245,69 @@ if page == "Dashboard":
                     st.info("ยังไม่มีประวัติการเดินทาง")
 
 elif page == "Recommendations":
-    st.subheader("✨ สถานที่ท่องเที่ยวที่แนะนำ")
+    st.subheader("✨ แนะนำสถานที่จากความสัมพันธ์ใน Graph")
+
     user_id = user_selector("recommend_user")
     top_n = st.slider("จำนวนคำแนะนำ", 1, 10, 5)
 
     rows = recommend_places(user_id, top_n)
 
-    st.caption(
-        "หลักการแนะนำ: สถานที่ที่เพื่อนของผู้ใช้เคยไป "
-        "และผู้ใช้ยังไม่เคยไป โดยเรียงตามจำนวนเพื่อนที่เคยไป"
+    st.markdown(
+        """
+        <div class="place-card">
+          <b>หลักการของระบบ</b><br>
+          👤 คุณ → <b>FRIEND_OF</b> → 👤 เพื่อน
+          → <b>VISITED</b> → 📍 สถานที่<br>
+          ระบบจะตัดสถานที่ที่คุณเคยไปแล้วออก
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
     if not rows:
         st.info("ยังไม่มีสถานที่ที่แนะนำสำหรับผู้ใช้นี้")
     else:
         for i, row in enumerate(rows, start=1):
-            st.markdown(
-                f"""
-                <div class="place-card">
-                  <span class="score-pill">
-                    #{i} · friend score {row['friend_score']}
-                  </span>
-                  <h3 style="margin:.55rem 0 .2rem 0">{row['name']}</h3>
-                  <div class="muted">{row['place_id']}</div>
-                  <p><b>เหตุผล:</b> {explain_recommendation(row)}</p>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+            friends = row.get("friend_names") or []
+            friend_text = ", ".join(friends) if friends else "ไม่พบข้อมูล"
+
+            with st.container(border=True):
+                st.markdown(
+                    f"### 📍 {row['name']}"
+                )
+                st.caption(f"Place ID: {row['place_id']}")
+
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.metric("👥 เพื่อนที่เคยไป", row["friend_score"])
+                with c2:
+                    st.metric("สถานะของคุณ", "ยังไม่เคยไป")
+
+                st.markdown("**🔗 ความสัมพันธ์ที่ทำให้เกิดคำแนะนำ**")
+                st.code(
+                    f"👤 {user_id}\n"
+                    f"   │ FRIEND_OF\n"
+                    f"   ▼\n"
+                    f"👥 {friend_text}\n"
+                    f"   │ VISITED\n"
+                    f"   ▼\n"
+                    f"📍 {row['name']}",
+                    language="text",
+                )
+
+                st.caption(
+                    f"คำแนะนำอันดับ #{i} · "
+                    f"เพื่อนที่เชื่อมโยงกับคุณเคยไป {row['friend_score']} คน"
+                )
+
+                if st.button(
+                    "🔎 ดู Graph ความสัมพันธ์",
+                    key=f"view_graph_{user_id}_{row['place_id']}",
+                ):
+                    st.graphviz_chart(
+                        relationship_graph(user_id, row["place_id"]),
+                        use_container_width=True,
+                    )
 
 elif page == "Place Search":
     st.subheader("🔎 ค้นหาสถานที่ท่องเที่ยว")
@@ -262,45 +361,37 @@ elif page == "Visited Places":
                 st.rerun()
 
 elif page == "Graph Explorer":
-    st.subheader("🕸️ Graph Explorer")
+    st.subheader("🕸️ Graph Explorer — ความสัมพันธ์ของผู้ใช้")
+
     user_id = user_selector("graph_user")
+
+    st.markdown(
+        """
+        <div class="place-card">
+          <b>โครงสร้าง Graph</b><br>
+          👤 User <b>FRIEND_OF</b> 👤 User
+          <br>
+          👤 User <b>VISITED</b> 📍 Place
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.graphviz_chart(
+        relationship_graph(user_id),
+        use_container_width=True,
+    )
+
+    st.markdown("### 📖 ความหมายของ Relationship")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.info("👥 FRIEND_OF — แสดงความสัมพันธ์ระหว่างผู้ใช้")
+    with c2:
+        st.info("📍 VISITED — แสดงว่าสถานที่นั้นถูกผู้ใช้ไปเยือน")
+
     rows = graph_neighborhood(user_id)
-
-    if not rows:
-        st.info("ยังไม่มี neighborhood graph")
-    else:
-        dot = [
-            "digraph G {",
-            'rankdir="LR";',
-            'node [shape=box, style="rounded,filled"];',
-        ]
-
-        seen_nodes = set()
-
-        for r in rows:
-            source_id = str(r["source_id"])
-            target_id = str(r["target_id"])
-
-            for nid, label, name in [
-                (source_id, r["source_label"], r["source_name"]),
-                (target_id, r["target_label"], r["target_name"]),
-            ]:
-                if nid not in seen_nodes:
-                    safe_name = str(name).replace('"', "'")
-                    dot.append(
-                        f'"{nid}" [label="{safe_name}\\n:{label}"];'
-                    )
-                    seen_nodes.add(nid)
-
-            dot.append(
-                f'"{source_id}" -> "{target_id}" '
-                f'[label="{r["relationship"]}"];'
-            )
-
-        dot.append("}")
-        st.graphviz_chart("\n".join(dot), use_container_width=True)
-
-        with st.expander("ดูข้อมูลความสัมพันธ์"):
+    if rows:
+        with st.expander("ดูข้อมูล Relationship แบบตาราง"):
             st.dataframe(
                 pd.DataFrame(rows),
                 use_container_width=True,
