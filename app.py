@@ -6,240 +6,736 @@ import pandas as pd
 import streamlit as st
 
 from neo4j_service import (
+    add_visit,
+    create_schema,
+    find_user,
+    friend_places,
     get_dashboard_metrics,
     get_profile,
-    get_students,
+    get_users,
     graph_neighborhood,
-    list_categories,
     ping,
-    recommend_books,
-    record_borrow,
-    search_books,
-    seed_demo_data,
+    popular_places,
+    recommend_places,
+    search_places,
+    seed_data,
+    visited_places,
 )
 
+
+# =========================================================
+# Page Config
+# =========================================================
+
 st.set_page_config(
-    page_title="GraphBook Recommender",
-    page_icon="📚",
+    page_title="Travel Graph Recommender",
+    page_icon="🌏",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-st.set_page_config(
-    page_title="GraphBook Recommender",
-    page_icon="025.png",  # ชื่อไฟล์รูปภาพของคุณที่อัปขึ้น GitHub
-    initial_sidebar_state="expanded",
-)
+
+# =========================================================
+# CSS
+# =========================================================
+
 st.markdown(
     """
     <style>
-      .block-container {padding-top: 1.3rem; padding-bottom: 2rem;}
-      .hero {
-        padding: 1.4rem 1.6rem; border-radius: 22px;
-        background: linear-gradient(120deg, #111827 0%, #1f2937 55%, #0f766e 100%);
-        color: white; margin-bottom: 1rem;
-      }
-      .hero h1 {margin:0; font-size:2.15rem;}
-      .hero p {opacity:.88; margin:.35rem 0 0 0;}
-      .book-card {
-        padding: 1rem 1.1rem; border: 1px solid rgba(128,128,128,.25);
-        border-radius: 16px; margin-bottom: .75rem;
-      }
-      .score-pill {
-        display:inline-block; padding:.2rem .55rem; border-radius:999px;
-        background:#0f766e; color:white; font-size:.8rem; font-weight:700;
-      }
-      .muted {opacity:.72; font-size:.9rem;}
+
+    .block-container {
+        padding-top: 1.3rem;
+        padding-bottom: 2rem;
+    }
+
+    .hero {
+        padding: 1.5rem;
+        border-radius: 22px;
+        background: linear-gradient(
+            120deg,
+            #111827 0%,
+            #1f2937 55%,
+            #0f766e 100%
+        );
+        color: white;
+        margin-bottom: 1rem;
+    }
+
+    .hero h1 {
+        margin: 0;
+        font-size: 2.2rem;
+    }
+
+    .hero p {
+        opacity: .88;
+        margin-top: .4rem;
+    }
+
+    .place-card {
+        padding: 1rem 1.1rem;
+        border: 1px solid rgba(128,128,128,.25);
+        border-radius: 16px;
+        margin-bottom: .8rem;
+    }
+
+    .score-pill {
+        display: inline-block;
+        padding: .2rem .6rem;
+        border-radius: 999px;
+        background: #0f766e;
+        color: white;
+        font-size: .8rem;
+        font-weight: 700;
+    }
+
+    .muted {
+        opacity: .72;
+        font-size: .9rem;
+    }
+
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 
-def require_connection() -> None:
+# =========================================================
+# Connection
+# =========================================================
+
+def require_connection():
+
     try:
+
         if not ping():
-            raise RuntimeError("Neo4j did not return a healthy response")
+            raise RuntimeError(
+                "Neo4j did not return a healthy response"
+            )
+
     except Exception as exc:
-        st.error("ยังเชื่อมต่อ Neo4j Aura ไม่สำเร็จ")
+
+        st.error(
+            "ยังไม่สามารถเชื่อมต่อ Neo4j Aura ได้"
+        )
+
         st.code(
-            '[neo4j]\nuri = "neo4j+s://YOUR_INSTANCE.databases.neo4j.io"\n'
-            'username = "neo4j"\npassword = "YOUR_PASSWORD"\ndatabase = "neo4j"',
+            """
+[neo4j]
+uri = "neo4j+s://YOUR_INSTANCE.databases.neo4j.io"
+username = "neo4j"
+password = "YOUR_PASSWORD"
+database = "neo4j"
+            """,
             language="toml",
         )
-        st.caption("ให้นำค่าด้านบนไปใส่ใน Streamlit Secrets และห้าม commit password ลง GitHub")
+
+        st.caption(
+            "ใส่ค่า Neo4j ใน Streamlit Secrets "
+            "และอย่าใส่ password ลง GitHub"
+        )
+
         st.exception(exc)
+
         st.stop()
 
 
-def student_selector(key: str = "student") -> str:
-    students = get_students()
-    if not students:
-        st.info("ยังไม่มีข้อมูลนักศึกษา กรุณาไปหน้า Admin / Setup แล้วสร้างข้อมูลตัวอย่าง")
+# =========================================================
+# User Selector
+# =========================================================
+
+def user_selector(key: str):
+
+    users = get_users()
+
+    if not users:
+
+        st.info(
+            "ยังไม่มีข้อมูล User "
+            "กรุณาไปที่ Setup ก่อน"
+        )
+
         st.stop()
-    labels = {f"{x['student_id']} — {x['name']}": x["student_id"] for x in students}
-    chosen = st.selectbox("เลือกผู้ใช้", list(labels), key=key)
-    return labels[chosen]
+
+    labels = {
+        f"{u['user_id']} — {u['name']}":
+        u["user_id"]
+        for u in users
+    }
+
+    selected = st.selectbox(
+        "เลือกผู้ใช้",
+        list(labels.keys()),
+        key=key,
+    )
+
+    return labels[selected]
 
 
-def explain_reason(row: dict) -> str:
-    parts = []
-    if row.get("friend_count", 0):
-        friends = ", ".join(row.get("friend_names") or [])
-        parts.append(f"เพื่อน {row['friend_count']} คนเคยยืม" + (f" ({friends})" if friends else ""))
-    if row.get("interest_matches", 0):
-        cats = ", ".join(row.get("matched_categories") or [])
-        parts.append(f"ตรงกับความสนใจ {row['interest_matches']} หมวด" + (f" ({cats})" if cats else ""))
-    if row.get("popularity", 0):
-        parts.append(f"ถูกยืมแล้ว {row['popularity']} ครั้ง")
-    if row.get("avg_rating", 0):
-        parts.append(f"คะแนนเฉลี่ย {row['avg_rating']:.2f}/5")
-    return " • ".join(parts) or "แนะนำจากข้อมูลพฤติกรรมโดยรวม"
+# =========================================================
+# Recommendation Explanation
+# =========================================================
 
+def explain_recommendation(row):
+
+    score = row.get("friend_score", 0)
+
+    friends = ", ".join(
+        row.get("friends") or []
+    )
+
+    if friends:
+
+        return (
+            f"มีเพื่อน {score} คนเคยไปสถานที่นี้ "
+            f"({friends})"
+        )
+
+    return (
+        "สถานที่นี้ถูกพบจากประวัติการท่องเที่ยว "
+        "ของเพื่อน"
+    )
+
+
+# =========================================================
+# Connection
+# =========================================================
 
 require_connection()
 
+
+# =========================================================
+# Sidebar
+# =========================================================
+
 with st.sidebar:
-    st.image(
-        "img/025.jpg", width=100
+
+    st.markdown("## 🌏 Travel Graph")
+
+    st.caption(
+        "Neo4j Aura + Streamlit"
     )
-    st.markdown("## 📚 GraphBook")
-    st.caption("Neo4j Aura + Streamlit")
+
     page = st.radio(
         "เมนู",
-        ["Dashboard", "Recommendations", "Book Search", "Borrow / Rate", "Graph Explorer", "Admin / Setup"],
+        [
+            "Dashboard",
+            "Recommendations",
+            "Place Search",
+            "Visited Places",
+            "Graph Explorer",
+            "Popular Places",
+            "Admin / Setup",
+        ],
     )
+
     st.divider()
-    st.caption("Bachelor-level Graph Database Project")
+
+    st.caption(
+        "Graph Database Travel Recommendation"
+    )
+
+
+# =========================================================
+# Hero
+# =========================================================
 
 st.markdown(
     """
     <div class="hero">
-      <h1>📚 GraphBook Recommendation System</h1>
-      <p>ระบบแนะนำหนังสือด้วย Graph Database ที่อธิบายเหตุผลของคำแนะนำได้</p>
+
+        <h1>
+            🌏 Travel Graph Recommendation System
+        </h1>
+
+        <p>
+            ระบบแนะนำสถานที่ท่องเที่ยวด้วย Graph Database
+        </p>
+
     </div>
     """,
     unsafe_allow_html=True,
 )
 
+
+# =========================================================
+# Dashboard
+# =========================================================
+
 if page == "Dashboard":
-    st.subheader("ภาพรวมระบบ")
-    m = get_dashboard_metrics()
+
+    st.subheader("📊 ภาพรวมระบบ")
+
+    metrics = get_dashboard_metrics()
+
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Students", m.get("students", 0))
-    c2.metric("Books", m.get("books", 0))
-    c3.metric("Borrowed relationships", m.get("borrows", 0))
-    c4.metric("Friend relationships", m.get("friendships", 0))
+
+    c1.metric(
+        "Users",
+        metrics.get("users", 0)
+    )
+
+    c2.metric(
+        "Places",
+        metrics.get("places", 0)
+    )
+
+    c3.metric(
+        "Visited",
+        metrics.get("visits", 0)
+    )
+
+    c4.metric(
+        "Friendships",
+        metrics.get("friendships", 0)
+    )
 
     st.divider()
-    student_id = student_selector("dash_student")
-    profile = get_profile(student_id)
-    
+
+    user_id = user_selector(
+        "dashboard_user"
+    )
+
+    profile = get_profile(user_id)
+
     if profile:
-        left, right = st.columns([1, 2])
-        with left:
-            st.markdown(f"### {profile['name']}")
-            st.write(f"**รหัส:** {profile['student_id']}")
-            st.write(f"**สาขา:** {profile['major']}")
-            st.write(f"**ชั้นปี:** {profile['year']}")
-            st.write("**ความสนใจ:** " + (", ".join(profile["interests"]) or "ยังไม่มี"))
-        with right:
-            st.markdown("### ประวัติการยืม")
-            if profile["borrowed"]:
-                st.dataframe(pd.DataFrame(profile["borrowed"]), use_container_width=True, hide_index=True)
-            else:
-                st.info("ยังไม่มีประวัติการยืม")
 
-elif page == "Recommendations":
-    st.subheader("✨ หนังสือที่แนะนำ")
-    student_id = student_selector("rec_student")
-    top_n = st.slider("จำนวนคำแนะนำ", 3, 12, 6)
-    rows = recommend_books(student_id, top_n)
-
-    st.caption("คะแนนตัวอย่าง = เพื่อน × 3 + หมวดความสนใจ × 2 + ความนิยม × 0.20 + rating เฉลี่ย × 0.50")
-    if not rows:
-        st.info("ยังไม่มีคำแนะนำสำหรับผู้ใช้นี้")
-    for i, row in enumerate(rows, start=1):
-        authors = ", ".join(row.get("authors") or []) or "ไม่ระบุผู้แต่ง"
-        categories = ", ".join(row.get("categories") or []) or "ไม่ระบุหมวด"
-        st.markdown(
-            f"""
-            <div class="book-card">
-              <span class="score-pill">#{i} · score {row['score']:.2f}</span>
-              <h3 style="margin:.55rem 0 .2rem 0">{row['title']}</h3>
-              <div class="muted">{row['book_id']} · {authors} · {categories}</div>
-              <p><b>เหตุผล:</b> {explain_reason(row)}</p>
-            </div>
-            """,
-            unsafe_allow_html=True,
+        left, right = st.columns(
+            [1, 2]
         )
 
-elif page == "Book Search":
-    st.subheader("🔎 ค้นหาหนังสือ")
-    c1, c2 = st.columns([2, 1])
-    keyword = c1.text_input("ชื่อหนังสือหรือผู้แต่ง", placeholder="เช่น Python, Neo4j, Kanya")
-    categories = [""] + list_categories()
-    category = c2.selectbox("หมวด", categories, format_func=lambda x: "ทุกหมวด" if x == "" else x)
-    rows = search_books(keyword, category)
-    st.write(f"พบ {len(rows)} รายการ")
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        with left:
 
-elif page == "Borrow / Rate":
-    st.subheader("📝 บันทึกการยืมและให้คะแนน")
-    student_id = student_selector("borrow_student")
-    books = search_books()
-    if not books:
-        st.info("ยังไม่มีหนังสือ")
-        st.stop()
-    book_labels = {f"{b['book_id']} — {b['title']}": b["book_id"] for b in books}
-    selected = st.selectbox("หนังสือ", list(book_labels))
-    borrow_date = st.date_input("วันที่ยืม", value=date.today())
-    use_rating = st.checkbox("ให้คะแนนพร้อมกัน")
-    rating = st.slider("คะแนน", 1.0, 5.0, 4.0, 0.5, disabled=not use_rating)
-    if st.button("บันทึก", type="primary", use_container_width=True):
-        record_borrow(student_id, book_labels[selected], borrow_date.isoformat(), rating if use_rating else None)
-        st.success("บันทึกความสัมพันธ์ BORROWED แล้ว")
+            st.markdown(
+                f"### 👤 {profile['name']}"
+            )
+
+            st.write(
+                f"**User ID:** "
+                f"{profile['user_id']}"
+            )
+
+            st.write(
+                f"**จำนวนสถานที่ที่เคยไป:** "
+                f"{len(profile['visited'])}"
+            )
+
+        with right:
+
+            st.markdown(
+                "### 🗺️ สถานที่ที่เคยไป"
+            )
+
+            if profile["visited"]:
+
+                st.dataframe(
+                    pd.DataFrame(
+                        profile["visited"]
+                    ),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+            else:
+
+                st.info(
+                    "ยังไม่มีประวัติการท่องเที่ยว"
+                )
+
+
+# =========================================================
+# Recommendations
+# =========================================================
+
+elif page == "Recommendations":
+
+    st.subheader(
+        "✨ สถานที่ท่องเที่ยวที่แนะนำ"
+    )
+
+    user_id = user_selector(
+        "recommend_user"
+    )
+
+    top_n = st.slider(
+        "จำนวนสถานที่ที่ต้องการแนะนำ",
+        1,
+        10,
+        5,
+    )
+
+    rows = recommend_places(
+        user_id,
+        top_n,
+    )
+
+    st.caption(
+        "ระบบแนะนำสถานที่จากสถานที่ที่เพื่อนเคยไป "
+        "และผู้ใช้ยังไม่เคยไป"
+    )
+
+    if not rows:
+
+        st.info(
+            "ยังไม่มีสถานที่ที่สามารถแนะนำได้"
+        )
+
+    else:
+
+        for i, row in enumerate(
+            rows,
+            start=1
+        ):
+
+            st.markdown(
+                f"""
+                <div class="place-card">
+
+                    <span class="score-pill">
+                        #{i}
+                        · friend score
+                        {row['friend_score']}
+                    </span>
+
+                    <h3>
+                        {row['recommendation']}
+                    </h3>
+
+                    <div class="muted">
+                        {row['place_id']}
+                    </div>
+
+                    <p>
+                        <b>เหตุผล:</b>
+                        {explain_recommendation(row)}
+                    </p>
+
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+
+# =========================================================
+# Place Search
+# =========================================================
+
+elif page == "Place Search":
+
+    st.subheader(
+        "🔎 ค้นหาสถานที่ท่องเที่ยว"
+    )
+
+    keyword = st.text_input(
+        "ชื่อสถานที่",
+        placeholder="เช่น Wat Arun"
+    )
+
+    rows = search_places(
+        keyword
+    )
+
+    st.write(
+        f"พบ {len(rows)} รายการ"
+    )
+
+    if rows:
+
+        st.dataframe(
+            pd.DataFrame(rows),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+
+# =========================================================
+# Visited Places
+# =========================================================
+
+elif page == "Visited Places":
+
+    st.subheader(
+        "🗺️ ประวัติการท่องเที่ยว"
+    )
+
+    user_id = user_selector(
+        "visited_user"
+    )
+
+    rows = visited_places(
+        user_id
+    )
+
+    if not rows:
+
+        st.info(
+            "ผู้ใช้นี้ยังไม่มีประวัติการท่องเที่ยว"
+        )
+
+    else:
+
+        st.dataframe(
+            pd.DataFrame(rows),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+
+# =========================================================
+# Graph Explorer
+# =========================================================
 
 elif page == "Graph Explorer":
-    st.subheader("🕸️ Graph Explorer")
-    student_id = student_selector("graph_student")
-    rows = graph_neighborhood(student_id)
+
+    st.subheader(
+        "🕸️ Graph Explorer"
+    )
+
+    user_id = user_selector(
+        "graph_user"
+    )
+
+    rows = graph_neighborhood(
+        user_id
+    )
+
     if not rows:
-        st.info("ยังไม่มี neighborhood graph")
+
+        st.info(
+            "ไม่พบความสัมพันธ์ของ User นี้"
+        )
+
     else:
-        dot = ["digraph G {", 'rankdir="LR";', 'node [shape=box, style="rounded,filled", fillcolor="#f8fafc"];']
+
+        dot = [
+            "digraph G {",
+            'rankdir="LR";',
+            'node [shape=box, style="rounded,filled"];',
+        ]
+
         seen_nodes = set()
-        for r in rows:
-            for nid, label, name in [
-                (r["source_id"], r["source_label"], r["source_name"]),
-                (r["target_id"], r["target_label"], r["target_name"]),
-            ]:
-                if nid not in seen_nodes:
-                    safe_name = str(name).replace('"', "'")
-                    dot.append(f'"{nid}" [label="{safe_name}\\n:{label}"];')
-                    seen_nodes.add(nid)
-            dot.append(f'"{r["source_id"]}" -> "{r["target_id"]}" [label="{r["relationship"]}"];')
+
+        for row in rows:
+
+            source_id = row[
+                "source_id"
+            ]
+
+            source_name = row[
+                "source_name"
+            ]
+
+            target_id = row[
+                "target_id"
+            ]
+
+            target_name = row[
+                "target_name"
+            ]
+
+            relationship = row[
+                "relationship"
+            ]
+
+            if source_id not in seen_nodes:
+
+                safe_source = str(
+                    source_name
+                ).replace('"', "'")
+
+                dot.append(
+                    f'"{source_id}" '
+                    f'[label="{safe_source}"];'
+                )
+
+                seen_nodes.add(
+                    source_id
+                )
+
+            if target_id not in seen_nodes:
+
+                safe_target = str(
+                    target_name
+                ).replace('"', "'")
+
+                dot.append(
+                    f'"{target_id}" '
+                    f'[label="{safe_target}"];'
+                )
+
+                seen_nodes.add(
+                    target_id
+                )
+
+            dot.append(
+                f'"{source_id}" -> '
+                f'"{target_id}" '
+                f'[label="{relationship}"];'
+            )
+
         dot.append("}")
-        st.graphviz_chart("\n".join(dot), use_container_width=True)
-        with st.expander("ดูข้อมูล edge ที่ใช้วาดกราฟ"):
-            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+        st.graphviz_chart(
+            "\n".join(dot),
+            use_container_width=True,
+        )
+
+        with st.expander(
+            "ดูข้อมูล Relationship"
+        ):
+
+            st.dataframe(
+                pd.DataFrame(rows),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+
+# =========================================================
+# Popular Places
+# =========================================================
+
+elif page == "Popular Places":
+
+    st.subheader(
+        "🔥 สถานที่ท่องเที่ยวยอดนิยม"
+    )
+
+    rows = popular_places()
+
+    if rows:
+
+        st.dataframe(
+            pd.DataFrame(rows),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    else:
+
+        st.info(
+            "ยังไม่มีข้อมูลการท่องเที่ยว"
+        )
+
+
+# =========================================================
+# Admin / Setup
+# =========================================================
 
 elif page == "Admin / Setup":
-    st.subheader("⚙️ Setup ข้อมูลตัวอย่าง")
-    st.warning("ปุ่มนี้ไม่ลบข้อมูลเดิม และใช้ MERGE จึงสามารถกดซ้ำได้")
+
+    st.subheader(
+        "⚙️ Setup ระบบ"
+    )
+
+    st.warning(
+        "ปุ่มนี้จะสร้าง User, Place และ Relationship "
+        "ตามข้อมูลจาก Colab"
+    )
+
     st.markdown(
         """
-        **Graph schema**
-        - `(:Student)-[:FRIEND_OF]-(:Student)`
-        - `(:Student)-[:BORROWED {borrow_date, rating}]->(:Book)`
-        - `(:Student)-[:INTERESTED_IN]->(:Category)`
-        - `(:Book)-[:IN_CATEGORY]->(:Category)`
-        - `(:Author)-[:WROTE]->(:Book)`
+        ### Graph Schema
+
+        ```text
+        (:User)-[:FRIEND_OF]->(:User)
+
+        (:User)-[:VISITED {
+            visit_date
+        }]->(:Place)
+        ```
+
+        ### Recommendation
+
+        ระบบจะหา:
+
+        ```text
+        User
+          ↓
+        Friend
+          ↓
+        VISITED
+          ↓
+        Place
+        ```
+
+        แล้วตัดสถานที่ที่ User เคยไปออก
         """
+
     )
-    if st.button("สร้าง Constraint + Demo Data", type="primary", use_container_width=True):
-        with st.spinner("กำลังสร้างข้อมูล..."):
-            seed_demo_data()
-        st.success("สร้างข้อมูลตัวอย่างเรียบร้อยแล้ว")
+
+    if st.button(
+        "สร้าง Constraint + ข้อมูลจาก Colab",
+        type="primary",
+        use_container_width=True,
+    ):
+
+        with st.spinner(
+            "กำลังสร้างข้อมูล..."
+        ):
+
+            seed_data()
+
+        st.success(
+            "สร้างข้อมูลจาก Colab เรียบร้อยแล้ว"
+        )
+
         st.rerun()
-        
+
+
+# =========================================================
+# Add Visit
+# =========================================================
+
+st.divider()
+
+with st.expander(
+    "➕ เพิ่มประวัติการไปสถานที่"
+):
+
+    users = get_users()
+    places = search_places()
+
+    if users and places:
+
+        user_options = {
+            f"{u['user_id']} — {u['name']}":
+            u["user_id"]
+            for u in users
+        }
+
+        place_options = {
+            f"{p['place_id']} — {p['name']}":
+            p["place_id"]
+            for p in places
+        }
+
+        selected_user = st.selectbox(
+            "User",
+            list(user_options.keys()),
+        )
+
+        selected_place = st.selectbox(
+            "สถานที่",
+            list(place_options.keys()),
+        )
+
+        visit_date = st.date_input(
+            "วันที่ไป",
+            value=date.today(),
+        )
+
+        if st.button(
+            "บันทึกการท่องเที่ยว"
+        ):
+
+            add_visit(
+                user_options[selected_user],
+                place_options[selected_place],
+                visit_date.isoformat(),
+            )
+
+            st.success(
+                "บันทึกข้อมูลเรียบร้อยแล้ว"
+            )
+
+            st.rerun()

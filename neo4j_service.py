@@ -6,330 +6,676 @@ import streamlit as st
 from neo4j import GraphDatabase, RoutingControl
 
 
-def _config() -> tuple[str, str, str, str]:
+# =========================================================
+# Neo4j Configuration
+# =========================================================
+
+def _config():
     cfg = st.secrets["neo4j"]
+
     return (
         cfg["uri"],
         cfg["username"],
         cfg["password"],
-        cfg.get("database", "ca18ca3e"),
+        cfg.get("database", "neo4j"),
     )
 
 
 @st.cache_resource(show_spinner=False)
 def get_driver():
-    """Create one thread-safe Neo4j Driver for the Streamlit process."""
     uri, username, password, _ = _config()
-    driver = GraphDatabase.driver(uri, auth=(username, password))
+
+    driver = GraphDatabase.driver(
+        uri,
+        auth=(username, password)
+    )
+
     driver.verify_connectivity()
+
     return driver
 
 
-def query(cypher: str, parameters: dict[str, Any] | None = None, *, write: bool = False) -> list[dict[str, Any]]:
-    """Execute parameterized Cypher and return rows as dictionaries."""
+def query(
+    cypher: str,
+    parameters: dict[str, Any] | None = None,
+    *,
+    write: bool = False,
+):
     _, _, _, database = _config()
+
     records, _, _ = get_driver().execute_query(
         cypher,
         parameters_=parameters or {},
         database_=database,
         routing_=RoutingControl.WRITE if write else RoutingControl.READ,
     )
+
     return [record.data() for record in records]
 
 
 def ping() -> bool:
     rows = query("RETURN 1 AS ok")
-    return bool(rows and rows[0]["ok"] == 1)
+
+    return bool(
+        rows and rows[0]["ok"] == 1
+    )
 
 
-def create_schema() -> None:
+# =========================================================
+# Schema
+# =========================================================
+
+def create_schema():
+
     statements = [
-        "CREATE CONSTRAINT student_id_unique IF NOT EXISTS FOR (s:Student) REQUIRE s.student_id IS UNIQUE",
-        "CREATE CONSTRAINT book_id_unique IF NOT EXISTS FOR (b:Book) REQUIRE b.book_id IS UNIQUE",
-        "CREATE CONSTRAINT author_id_unique IF NOT EXISTS FOR (a:Author) REQUIRE a.author_id IS UNIQUE",
-        "CREATE CONSTRAINT category_name_unique IF NOT EXISTS FOR (c:Category) REQUIRE c.name IS UNIQUE",
+
+        """
+        CREATE CONSTRAINT user_id_unique
+        IF NOT EXISTS
+        FOR (u:User)
+        REQUIRE u.user_id IS UNIQUE
+        """,
+
+        """
+        CREATE CONSTRAINT place_id_unique
+        IF NOT EXISTS
+        FOR (p:Place)
+        REQUIRE p.place_id IS UNIQUE
+        """,
     ]
-    for stmt in statements:
-        query(stmt, write=True)
+
+    for statement in statements:
+        query(
+            statement,
+            write=True
+        )
 
 
-def seed_demo_data() -> None:
-    """Idempotent sample dataset: safe to run more than once."""
+# =========================================================
+# Data from Colab
+# =========================================================
+
+def seed_data():
+
     create_schema()
 
-    students = [
-        {"student_id": "S001", "name": "Anan", "major": "Computer Science", "year": 2},
-        {"student_id": "S002", "name": "Mali", "major": "Computer Science", "year": 2},
-        {"student_id": "S003", "name": "Krit", "major": "Information Technology", "year": 3},
-        {"student_id": "S004", "name": "Nida", "major": "Data Science", "year": 2},
-        {"student_id": "S005", "name": "Ploy", "major": "Business Computer", "year": 3},
-        {"student_id": "S006", "name": "Ton", "major": "Computer Science", "year": 1},
+    # -----------------------------------------------------
+    # Users
+    # -----------------------------------------------------
+
+    users = [
+        {"user_id": "U001", "name": "mark"},
+        {"user_id": "U002", "name": "jay"},
+        {"user_id": "U003", "name": "moren"},
+        {"user_id": "U004", "name": "jacob"},
+        {"user_id": "U005", "name": "yu"},
+        {"user_id": "U006", "name": "kon"},
+        {"user_id": "U007", "name": "bonus"},
+        {"user_id": "U008", "name": "model"},
+        {"user_id": "U009", "name": "fay"},
+        {"user_id": "U010", "name": "nax"},
     ]
-    books = [
-        {"book_id": "B101", "title": "Python Programming", "year": 2025},
-        {"book_id": "B102", "title": "Artificial Intelligence Basics", "year": 2026},
-        {"book_id": "B103", "title": "Data Science for Students", "year": 2025},
-        {"book_id": "B104", "title": "Introduction to Database", "year": 2024},
-        {"book_id": "B105", "title": "Graph Databases with Neo4j", "year": 2026},
-        {"book_id": "B106", "title": "Machine Learning Foundations", "year": 2025},
-        {"book_id": "B107", "title": "Web Application Development", "year": 2024},
-        {"book_id": "B108", "title": "Algorithms and Problem Solving", "year": 2023},
-    ]
-    authors = [
-        {"author_id": "A01", "name": "Somchai Tech"},
-        {"author_id": "A02", "name": "Narin Data"},
-        {"author_id": "A03", "name": "Kanya AI"},
-        {"author_id": "A04", "name": "Preecha DB"},
-    ]
-    categories = ["Programming", "AI", "Data Science", "Database", "Web Development", "Algorithms"]
 
     query(
         """
-        UNWIND $rows AS row
-        MERGE (s:Student {student_id: row.student_id})
-        SET s.name = row.name, s.major = row.major, s.year = row.year
+        UNWIND $users AS row
+
+        MERGE (u:User {
+            user_id: row.user_id
+        })
+
+        SET u.name = row.name
         """,
-        {"rows": students},
+        {
+            "users": users
+        },
         write=True,
     )
+
+    # -----------------------------------------------------
+    # Places
+    # -----------------------------------------------------
+
+    places = [
+        {
+            "place_id": "P001",
+            "name": "Wat Phra Kaew",
+        },
+        {
+            "place_id": "P002",
+            "name": "Wat Arun",
+        },
+        {
+            "place_id": "P003",
+            "name": "Wat Phra That Doi Suthep",
+        },
+        {
+            "place_id": "P004",
+            "name": "Ayutthaya Historical Park",
+        },
+        {
+            "place_id": "P005",
+            "name": "Railay Beach & Phi Phi Islands",
+        },
+        {
+            "place_id": "P006",
+            "name": "Khao Sok National Park",
+        },
+        {
+            "place_id": "P007",
+            "name": "Erawan National Park",
+        },
+        {
+            "place_id": "P008",
+            "name": "Pa Tong Beach",
+        },
+        {
+            "place_id": "P009",
+            "name": "Pai Canyon",
+        },
+        {
+            "place_id": "P010",
+            "name": "Khao Yai National Park",
+        },
+    ]
+
     query(
         """
-        UNWIND $rows AS row
-        MERGE (b:Book {book_id: row.book_id})
-        SET b.title = row.title, b.year = row.year
+        UNWIND $places AS row
+
+        MERGE (p:Place {
+            place_id: row.place_id
+        })
+
+        SET p.name = row.name
         """,
-        {"rows": books},
+        {
+            "places": places
+        },
         write=True,
     )
-    query(
-        """
-        UNWIND $rows AS row
-        MERGE (a:Author {author_id: row.author_id})
-        SET a.name = row.name
-        """,
-        {"rows": authors},
-        write=True,
-    )
-    query(
-        "UNWIND $rows AS name MERGE (:Category {name:name})",
-        {"rows": categories},
-        write=True,
-    )
+
+    # -----------------------------------------------------
+    # Friendships
+    # -----------------------------------------------------
 
     friendships = [
-        ["S001", "S002"], ["S001", "S003"], ["S001", "S004"],
-        ["S002", "S005"], ["S003", "S004"], ["S004", "S006"],
+        ["U001", "U002"],
+        ["U001", "U003"],
+        ["U001", "U004"],
+        ["U002", "U005"],
+        ["U002", "U006"],
+        ["U003", "U007"],
+        ["U003", "U008"],
+        ["U004", "U009"],
+        ["U004", "U010"],
+        ["U005", "U006"],
+        ["U007", "U008"],
+        ["U009", "U010"],
     ]
+
     query(
         """
-        UNWIND $rows AS row
-        MATCH (a:Student {student_id: row[0]}), (b:Student {student_id: row[1]})
+        UNWIND $friendships AS row
+
+        MATCH
+            (a:User {user_id: row[0]}),
+            (b:User {user_id: row[1]})
+
         MERGE (a)-[:FRIEND_OF]->(b)
         """,
-        {"rows": friendships},
+        {
+            "friendships": friendships
+        },
         write=True,
     )
 
-    borrows = [
-        {"s": "S001", "b": "B101", "date": "2026-08-01", "rating": 4.0},
-        {"s": "S001", "b": "B108", "date": "2026-08-14", "rating": 4.0},
-        {"s": "S002", "b": "B103", "date": "2026-08-05", "rating": 5.0},
-        {"s": "S002", "b": "B102", "date": "2026-08-18", "rating": 4.0},
-        {"s": "S003", "b": "B103", "date": "2026-08-07", "rating": 4.0},
-        {"s": "S003", "b": "B104", "date": "2026-08-20", "rating": 5.0},
-        {"s": "S004", "b": "B105", "date": "2026-08-09", "rating": 5.0},
-        {"s": "S004", "b": "B103", "date": "2026-08-24", "rating": 5.0},
-        {"s": "S005", "b": "B107", "date": "2026-08-11", "rating": 4.0},
-        {"s": "S006", "b": "B106", "date": "2026-08-12", "rating": 4.0},
+    # -----------------------------------------------------
+    # Visited
+    # -----------------------------------------------------
+
+    visited = [
+        {
+            "user_id": "U001",
+            "place_id": "P001",
+            "date": "2026-09-01",
+        },
+        {
+            "user_id": "U001",
+            "place_id": "P003",
+            "date": "2026-09-02",
+        },
+        {
+            "user_id": "U002",
+            "place_id": "P002",
+            "date": "2026-09-03",
+        },
+        {
+            "user_id": "U002",
+            "place_id": "P003",
+            "date": "2026-09-04",
+        },
+        {
+            "user_id": "U003",
+            "place_id": "P003",
+            "date": "2026-09-05",
+        },
+        {
+            "user_id": "U003",
+            "place_id": "P004",
+            "date": "2026-09-06",
+        },
+        {
+            "user_id": "U004",
+            "place_id": "P005",
+            "date": "2026-09-07",
+        },
+        {
+            "user_id": "U005",
+            "place_id": "P006",
+            "date": "2026-09-08",
+        },
+        {
+            "user_id": "U006",
+            "place_id": "P007",
+            "date": "2026-09-09",
+        },
+        {
+            "user_id": "U007",
+            "place_id": "P008",
+            "date": "2026-09-10",
+        },
+        {
+            "user_id": "U008",
+            "place_id": "P009",
+            "date": "2026-09-11",
+        },
+        {
+            "user_id": "U009",
+            "place_id": "P010",
+            "date": "2026-09-12",
+        },
+        {
+            "user_id": "U010",
+            "place_id": "P001",
+            "date": "2026-09-13",
+        },
     ]
+
     query(
         """
-        UNWIND $rows AS row
-        MATCH (s:Student {student_id: row.s}), (b:Book {book_id: row.b})
-        MERGE (s)-[r:BORROWED]->(b)
-        SET r.borrow_date = date(row.date), r.rating = row.rating
+        UNWIND $visited AS row
+
+        MATCH
+            (u:User {
+                user_id: row.user_id
+            }),
+            (p:Place {
+                place_id: row.place_id
+            })
+
+        MERGE (u)-[r:VISITED]->(p)
+
+        SET r.visit_date = date(row.date)
         """,
-        {"rows": borrows},
+        {
+            "visited": visited
+        },
         write=True,
     )
 
-    interests = [
-        ["S001", "Programming"], ["S001", "Database"],
-        ["S002", "AI"], ["S002", "Data Science"],
-        ["S003", "Database"], ["S003", "Data Science"],
-        ["S004", "AI"], ["S004", "Data Science"],
-        ["S005", "Web Development"], ["S006", "Programming"],
-    ]
-    query(
+
+# =========================================================
+# Users
+# =========================================================
+
+def get_users():
+
+    return query(
         """
-        UNWIND $rows AS row
-        MATCH (s:Student {student_id: row[0]}), (c:Category {name: row[1]})
-        MERGE (s)-[:INTERESTED_IN]->(c)
-        """,
-        {"rows": interests},
-        write=True,
-    )
+        MATCH (u:User)
 
-    book_categories = [
-        ["B101", "Programming"], ["B102", "AI"], ["B103", "Data Science"],
-        ["B104", "Database"], ["B105", "Database"], ["B106", "AI"],
-        ["B106", "Data Science"], ["B107", "Web Development"],
-        ["B108", "Algorithms"], ["B108", "Programming"],
-    ]
-    query(
+        RETURN
+            u.user_id AS user_id,
+            u.name AS name
+
+        ORDER BY u.user_id
         """
-        UNWIND $rows AS row
-        MATCH (b:Book {book_id: row[0]}), (c:Category {name: row[1]})
-        MERGE (b)-[:IN_CATEGORY]->(c)
-        """,
-        {"rows": book_categories},
-        write=True,
-    )
-
-    wrote = [
-        ["A01", "B101"], ["A03", "B102"], ["A02", "B103"], ["A04", "B104"],
-        ["A04", "B105"], ["A03", "B106"], ["A01", "B107"], ["A01", "B108"],
-    ]
-    query(
-        """
-        UNWIND $rows AS row
-        MATCH (a:Author {author_id: row[0]}), (b:Book {book_id: row[1]})
-        MERGE (a)-[:WROTE]->(b)
-        """,
-        {"rows": wrote},
-        write=True,
     )
 
 
-def get_students() -> list[dict[str, Any]]:
-    return query("MATCH (s:Student) RETURN s.student_id AS student_id, s.name AS name, s.major AS major, s.year AS year ORDER BY s.student_id")
+def find_user(user_id: str):
 
-
-def get_dashboard_metrics() -> dict[str, int]:
     rows = query(
         """
-        MATCH (s:Student) WITH count(s) AS students
-        MATCH (b:Book) WITH students, count(b) AS books
-        MATCH ()-[r:BORROWED]->() WITH students, books, count(r) AS borrows
-        MATCH ()-[f:FRIEND_OF]->()
-        RETURN students, books, borrows, count(f) AS friendships
-        """
+        MATCH (u:User {
+            user_id: $user_id
+        })
+
+        RETURN
+            u.user_id AS user_id,
+            u.name AS name
+        """,
+        {
+            "user_id": user_id
+        },
     )
-    return rows[0] if rows else {"students": 0, "books": 0, "borrows": 0, "friendships": 0}
+
+    return rows[0] if rows else None
 
 
-def get_profile(student_id: str) -> dict[str, Any] | None:
+# =========================================================
+# User Profile
+# =========================================================
+
+def get_profile(user_id: str):
+
     rows = query(
         """
-        MATCH (s:Student {student_id:$student_id})
-        OPTIONAL MATCH (s)-[:INTERESTED_IN]->(c:Category)
-        OPTIONAL MATCH (s)-[:BORROWED]->(b:Book)
-        RETURN s.student_id AS student_id, s.name AS name, s.major AS major, s.year AS year,
-               collect(DISTINCT c.name) AS interests,
-               collect(DISTINCT {book_id:b.book_id, title:b.title}) AS borrowed
+        MATCH (u:User {
+            user_id: $user_id
+        })
+
+        OPTIONAL MATCH
+            (u)-[:VISITED]->(p:Place)
+
+        RETURN
+            u.user_id AS user_id,
+            u.name AS name,
+            collect(
+                DISTINCT {
+                    place_id: p.place_id,
+                    place: p.name
+                }
+            ) AS visited
         """,
-        {"student_id": student_id},
+        {
+            "user_id": user_id
+        },
     )
+
     if not rows:
         return None
-    row = rows[0]
-    row["borrowed"] = [x for x in row["borrowed"] if x.get("book_id")]
-    return row
+
+    profile = rows[0]
+
+    profile["visited"] = [
+        x
+        for x in profile["visited"]
+        if x.get("place_id")
+    ]
+
+    return profile
 
 
-def recommend_books(student_id: str, limit: int = 8) -> list[dict[str, Any]]:
-    """Explainable hybrid score: social + interests + popularity + ratings."""
+# =========================================================
+# Visited Places
+# =========================================================
+
+def visited_places(user_id: str):
+
     return query(
         """
-        MATCH (u:Student {student_id:$student_id})
-        MATCH (b:Book)
-        WHERE NOT (u)-[:BORROWED]->(b)
+        MATCH
+            (u:User {
+                user_id: $user_id
+            })
+            -[r:VISITED]->
+            (p:Place)
 
-        OPTIONAL MATCH (u)-[:FRIEND_OF]-(f:Student)-[:BORROWED]->(b)
-        WITH u, b, count(DISTINCT f) AS friend_count,
-             [x IN collect(DISTINCT f.name) WHERE x IS NOT NULL][0..3] AS friend_names
+        RETURN
+            p.place_id AS place_id,
+            p.name AS name,
+            r.visit_date AS visit_date
 
-        OPTIONAL MATCH (u)-[:INTERESTED_IN]->(c:Category)<-[:IN_CATEGORY]-(b)
-        WITH b, friend_count, friend_names,
-             count(DISTINCT c) AS interest_matches,
-             [x IN collect(DISTINCT c.name) WHERE x IS NOT NULL] AS matched_categories
+        ORDER BY visit_date
+        """,
+        {
+            "user_id": user_id
+        },
+    )
 
-        OPTIONAL MATCH (:Student)-[br:BORROWED]->(b)
-        WITH b, friend_count, friend_names, interest_matches, matched_categories,
-             count(br) AS popularity,
-             avg(br.rating) AS avg_rating
 
-        WITH b, friend_count, friend_names, interest_matches, matched_categories,
-             popularity, coalesce(avg_rating, 0.0) AS avg_rating,
-             (friend_count * 3.0) + (interest_matches * 2.0) +
-             (popularity * 0.20) + (coalesce(avg_rating, 0.0) * 0.50) AS score
-        WHERE friend_count > 0 OR interest_matches > 0 OR popularity > 0
+# =========================================================
+# Search Places
+# =========================================================
 
-        OPTIONAL MATCH (a:Author)-[:WROTE]->(b)
-        OPTIONAL MATCH (b)-[:IN_CATEGORY]->(allc:Category)
-        RETURN b.book_id AS book_id, b.title AS title, b.year AS year,
-               collect(DISTINCT a.name) AS authors,
-               collect(DISTINCT allc.name) AS categories,
-               friend_count, friend_names, interest_matches, matched_categories,
-               popularity, round(avg_rating * 100) / 100.0 AS avg_rating,
-               round(score * 100) / 100.0 AS score
-        ORDER BY score DESC, b.title
+def search_places(keyword: str = ""):
+
+    return query(
+        """
+        MATCH (p:Place)
+
+        WHERE
+            $keyword = ""
+            OR
+            toLower(p.name)
+            CONTAINS
+            toLower($keyword)
+
+        RETURN
+            p.place_id AS place_id,
+            p.name AS name
+
+        ORDER BY p.name
+        """,
+        {
+            "keyword": keyword.strip()
+        },
+    )
+
+
+# =========================================================
+# Recommendation
+# =========================================================
+
+def recommend_places(
+    user_id: str,
+    limit: int = 10
+):
+
+    return query(
+        """
+        MATCH
+            (me:User {
+                user_id: $user_id
+            })
+            -[:FRIEND_OF]-
+            (friend:User)
+            -[:VISITED]->
+            (place:Place)
+
+        WHERE NOT EXISTS {
+            MATCH
+                (me)-[:VISITED]->(place)
+        }
+
+        RETURN
+            place.place_id AS place_id,
+            place.name AS recommendation,
+            count(DISTINCT friend) AS friend_score,
+            collect(DISTINCT friend.name) AS friends
+
+        ORDER BY
+            friend_score DESC,
+            recommendation
+
         LIMIT $limit
         """,
-        {"student_id": student_id, "limit": int(limit)},
+        {
+            "user_id": user_id,
+            "limit": int(limit),
+        },
     )
 
 
-def search_books(keyword: str = "", category: str | None = None) -> list[dict[str, Any]]:
+# =========================================================
+# Friend Places
+# =========================================================
+
+def friend_places(user_id: str):
+
     return query(
         """
-        MATCH (b:Book)
-        OPTIONAL MATCH (a:Author)-[:WROTE]->(b)
-        OPTIONAL MATCH (b)-[:IN_CATEGORY]->(c:Category)
-        WITH b, collect(DISTINCT a.name) AS authors, collect(DISTINCT c.name) AS categories
-        WHERE ($keyword = '' OR toLower(b.title) CONTAINS toLower($keyword)
-               OR any(x IN authors WHERE toLower(x) CONTAINS toLower($keyword)))
-          AND ($category = '' OR $category IN categories)
-        RETURN b.book_id AS book_id, b.title AS title, b.year AS year,
-               authors, categories
-        ORDER BY b.title
-        """,
-        {"keyword": keyword.strip(), "category": category or ""},
+        MATCH
+            (me:User {
+                user_id: $user_id
+            })
+            -[:FRIEND_OF]-
+            (friend:User)
+            -[:VISITED]->
+            (place:Place)
+
+        RETURN
+            friend.name AS friend,
+            place.name AS place
+
+        ORDER BY
+            friend,
+            place
+        """
     )
 
 
-def list_categories() -> list[str]:
-    return [row["name"] for row in query("MATCH (c:Category) RETURN c.name AS name ORDER BY c.name")]
+# =========================================================
+# Popular Places
+# =========================================================
+
+def popular_places():
+
+    return query(
+        """
+        MATCH
+            (:User)-[:VISITED]->(p:Place)
+
+        RETURN
+            p.place_id AS place_id,
+            p.name AS place,
+            count(*) AS visit_count
+
+        ORDER BY
+            visit_count DESC,
+            place
+        """
+    )
 
 
-def record_borrow(student_id: str, book_id: str, borrow_date: str, rating: float | None = None) -> None:
+# =========================================================
+# Dashboard
+# =========================================================
+
+def get_dashboard_metrics():
+
+    rows = query(
+        """
+        MATCH (u:User)
+        WITH count(u) AS users
+
+        MATCH (p:Place)
+        WITH
+            users,
+            count(p) AS places
+
+        MATCH ()-[v:VISITED]->()
+        WITH
+            users,
+            places,
+            count(v) AS visits
+
+        MATCH ()-[f:FRIEND_OF]->()
+
+        RETURN
+            users,
+            places,
+            visits,
+            count(f) AS friendships
+        """
+    )
+
+    if rows:
+        return rows[0]
+
+    return {
+        "users": 0,
+        "places": 0,
+        "visits": 0,
+        "friendships": 0,
+    }
+
+
+# =========================================================
+# Graph Explorer
+# =========================================================
+
+def graph_neighborhood(
+    user_id: str,
+    limit: int = 50
+):
+
+    return query(
+        """
+        MATCH
+            (u:User {
+                user_id: $user_id
+            })
+            -[r]-
+            (n)
+
+        RETURN
+            u.user_id AS source_id,
+            "User" AS source_label,
+            u.name AS source_name,
+
+            elementId(n) AS target_id,
+            labels(n)[0] AS target_label,
+
+            CASE
+                WHEN n:User THEN n.name
+                WHEN n:Place THEN n.name
+                ELSE toString(n)
+            END AS target_name,
+
+            type(r) AS relationship
+
+        LIMIT $limit
+        """,
+        {
+            "user_id": user_id,
+            "limit": int(limit),
+        },
+    )
+
+
+# =========================================================
+# Add Visit
+# =========================================================
+
+def add_visit(
+    user_id: str,
+    place_id: str,
+    visit_date: str,
+):
+
     query(
         """
-        MATCH (s:Student {student_id:$student_id}), (b:Book {book_id:$book_id})
-        MERGE (s)-[r:BORROWED]->(b)
-        SET r.borrow_date = date($borrow_date)
-        FOREACH (_ IN CASE WHEN $rating IS NULL THEN [] ELSE [1] END | SET r.rating = $rating)
+        MATCH
+            (u:User {
+                user_id: $user_id
+            }),
+            (p:Place {
+                place_id: $place_id
+            })
+
+        MERGE
+            (u)-[r:VISITED]->(p)
+
+        SET
+            r.visit_date = date($visit_date)
         """,
-        {"student_id": student_id, "book_id": book_id, "borrow_date": borrow_date, "rating": rating},
+        {
+            "user_id": user_id,
+            "place_id": place_id,
+            "visit_date": visit_date,
+        },
         write=True,
-    )
-
-
-def graph_neighborhood(student_id: str, limit: int = 40) -> list[dict[str, Any]]:
-    return query(
-        """
-        MATCH (u:Student {student_id:$student_id})
-        OPTIONAL MATCH p=(u)-[:FRIEND_OF|BORROWED|INTERESTED_IN*1..2]-(x)
-        WITH u, collect(p)[0..$limit] AS paths
-        UNWIND paths AS p
-        UNWIND relationships(p) AS r
-        WITH DISTINCT startNode(r) AS s, r, endNode(r) AS t
-        RETURN elementId(s) AS source_id, labels(s)[0] AS source_label,
-               coalesce(s.name, s.title, s.student_id, s.book_id) AS source_name,
-               type(r) AS relationship,
-               elementId(t) AS target_id, labels(t)[0] AS target_label,
-               coalesce(t.name, t.title, t.student_id, t.book_id) AS target_name
-        LIMIT $limit
-        """,
-        {"student_id": student_id, "limit": int(limit)},
     )
