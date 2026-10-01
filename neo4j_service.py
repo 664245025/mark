@@ -6,13 +6,8 @@ import streamlit as st
 from neo4j import GraphDatabase, RoutingControl
 
 
-# =========================================================
-# Neo4j Configuration
-# =========================================================
-
-def _config():
+def _config() -> tuple[str, str, str, str]:
     cfg = st.secrets["neo4j"]
-
     return (
         cfg["uri"],
         cfg["username"],
@@ -24,14 +19,8 @@ def _config():
 @st.cache_resource(show_spinner=False)
 def get_driver():
     uri, username, password, _ = _config()
-
-    driver = GraphDatabase.driver(
-        uri,
-        auth=(username, password)
-    )
-
+    driver = GraphDatabase.driver(uri, auth=(username, password))
     driver.verify_connectivity()
-
     return driver
 
 
@@ -40,7 +29,7 @@ def query(
     parameters: dict[str, Any] | None = None,
     *,
     write: bool = False,
-):
+) -> list[dict[str, Any]]:
     _, _, _, database = _config()
 
     records, _, _ = get_driver().execute_query(
@@ -49,59 +38,33 @@ def query(
         database_=database,
         routing_=RoutingControl.WRITE if write else RoutingControl.READ,
     )
-
     return [record.data() for record in records]
 
 
 def ping() -> bool:
     rows = query("RETURN 1 AS ok")
-
-    return bool(
-        rows and rows[0]["ok"] == 1
-    )
+    return bool(rows and rows[0]["ok"] == 1)
 
 
-# =========================================================
-# Schema
-# =========================================================
-
-def create_schema():
-
+def create_schema() -> None:
     statements = [
-
         """
-        CREATE CONSTRAINT user_id_unique
-        IF NOT EXISTS
-        FOR (u:User)
-        REQUIRE u.user_id IS UNIQUE
+        CREATE CONSTRAINT user_id_unique IF NOT EXISTS
+        FOR (u:User) REQUIRE u.user_id IS UNIQUE
         """,
-
         """
-        CREATE CONSTRAINT place_id_unique
-        IF NOT EXISTS
-        FOR (p:Place)
-        REQUIRE p.place_id IS UNIQUE
+        CREATE CONSTRAINT place_id_unique IF NOT EXISTS
+        FOR (p:Place) REQUIRE p.place_id IS UNIQUE
         """,
     ]
 
     for statement in statements:
-        query(
-            statement,
-            write=True
-        )
+        query(statement, write=True)
 
 
-# =========================================================
-# Data from Colab
-# =========================================================
-
-def seed_data():
-
+def seed_data() -> None:
+    """Seed the Travel Graph dataset used by the Colab notebook."""
     create_schema()
-
-    # -----------------------------------------------------
-    # Users
-    # -----------------------------------------------------
 
     users = [
         {"user_id": "U001", "name": "mark"},
@@ -116,561 +79,239 @@ def seed_data():
         {"user_id": "U010", "name": "nax"},
     ]
 
-    query(
-        """
-        UNWIND $users AS row
-
-        MERGE (u:User {
-            user_id: row.user_id
-        })
-
-        SET u.name = row.name
-        """,
-        {
-            "users": users
-        },
-        write=True,
-    )
-
-    # -----------------------------------------------------
-    # Places
-    # -----------------------------------------------------
-
     places = [
-        {
-            "place_id": "P001",
-            "name": "Wat Phra Kaew",
-        },
-        {
-            "place_id": "P002",
-            "name": "Wat Arun",
-        },
-        {
-            "place_id": "P003",
-            "name": "Wat Phra That Doi Suthep",
-        },
-        {
-            "place_id": "P004",
-            "name": "Ayutthaya Historical Park",
-        },
-        {
-            "place_id": "P005",
-            "name": "Railay Beach & Phi Phi Islands",
-        },
-        {
-            "place_id": "P006",
-            "name": "Khao Sok National Park",
-        },
-        {
-            "place_id": "P007",
-            "name": "Erawan National Park",
-        },
-        {
-            "place_id": "P008",
-            "name": "Pa Tong Beach",
-        },
-        {
-            "place_id": "P009",
-            "name": "Pai Canyon",
-        },
-        {
-            "place_id": "P010",
-            "name": "Khao Yai National Park",
-        },
+        {"place_id": "P001", "name": "Wat Phra Kaew"},
+        {"place_id": "P002", "name": "Wat Arun"},
+        {"place_id": "P003", "name": "Wat Phra That Doi Suthep"},
+        {"place_id": "P004", "name": "Ayutthaya Historical Park"},
+        {"place_id": "P005", "name": "Railay Beach & Phi Phi Islands"},
+        {"place_id": "P006", "name": "Khao Sok National Park"},
+        {"place_id": "P007", "name": "Erawan National Park"},
+        {"place_id": "P008", "name": "Pa Tong Beach"},
+        {"place_id": "P009", "name": "Pai Canyon"},
+        {"place_id": "P010", "name": "Khao Yai National Park"},
     ]
-
-    query(
-        """
-        UNWIND $places AS row
-
-        MERGE (p:Place {
-            place_id: row.place_id
-        })
-
-        SET p.name = row.name
-        """,
-        {
-            "places": places
-        },
-        write=True,
-    )
-
-    # -----------------------------------------------------
-    # Friendships
-    # -----------------------------------------------------
 
     friendships = [
-        ["U001", "U002"],
-        ["U001", "U003"],
-        ["U001", "U004"],
-        ["U002", "U005"],
-        ["U002", "U006"],
-        ["U003", "U007"],
-        ["U003", "U008"],
-        ["U004", "U009"],
-        ["U004", "U010"],
-        ["U005", "U006"],
-        ["U007", "U008"],
-        ["U009", "U010"],
+        ("U001", "U002"),
+        ("U001", "U003"),
+        ("U001", "U004"),
+        ("U002", "U005"),
+        ("U002", "U006"),
+        ("U003", "U007"),
+        ("U003", "U008"),
+        ("U004", "U009"),
+        ("U004", "U010"),
+        ("U005", "U006"),
+        ("U007", "U008"),
+        ("U009", "U010"),
+    ]
+
+    visits = [
+        ("U001", "P001", "2026-09-01"),
+        ("U001", "P003", "2026-09-02"),
+        ("U002", "P002", "2026-09-03"),
+        ("U002", "P003", "2026-09-04"),
+        ("U003", "P003", "2026-09-05"),
+        ("U003", "P004", "2026-09-06"),
+        ("U004", "P005", "2026-09-07"),
+        ("U005", "P006", "2026-09-08"),
+        ("U006", "P007", "2026-09-09"),
+        ("U007", "P008", "2026-09-10"),
+        ("U008", "P009", "2026-09-11"),
+        ("U009", "P010", "2026-09-12"),
+        ("U010", "P001", "2026-09-13"),
     ]
 
     query(
         """
-        UNWIND $friendships AS row
+        UNWIND $users AS item
+        MERGE (u:User {user_id:item.user_id})
+        SET u.name = item.name
+        """,
+        {"users": users},
+        write=True,
+    )
 
-        MATCH
-            (a:User {user_id: row[0]}),
-            (b:User {user_id: row[1]})
+    query(
+        """
+        UNWIND $places AS item
+        MERGE (p:Place {place_id:item.place_id})
+        SET p.name = item.name
+        """,
+        {"places": places},
+        write=True,
+    )
 
+    query(
+        """
+        UNWIND $friendships AS pair
+        MATCH (a:User {user_id:pair[0]})
+        MATCH (b:User {user_id:pair[1]})
         MERGE (a)-[:FRIEND_OF]->(b)
         """,
-        {
-            "friendships": friendships
-        },
+        {"friendships": [list(x) for x in friendships]},
         write=True,
     )
-
-    # -----------------------------------------------------
-    # Visited
-    # -----------------------------------------------------
-
-    visited = [
-        {
-            "user_id": "U001",
-            "place_id": "P001",
-            "date": "2026-09-01",
-        },
-        {
-            "user_id": "U001",
-            "place_id": "P003",
-            "date": "2026-09-02",
-        },
-        {
-            "user_id": "U002",
-            "place_id": "P002",
-            "date": "2026-09-03",
-        },
-        {
-            "user_id": "U002",
-            "place_id": "P003",
-            "date": "2026-09-04",
-        },
-        {
-            "user_id": "U003",
-            "place_id": "P003",
-            "date": "2026-09-05",
-        },
-        {
-            "user_id": "U003",
-            "place_id": "P004",
-            "date": "2026-09-06",
-        },
-        {
-            "user_id": "U004",
-            "place_id": "P005",
-            "date": "2026-09-07",
-        },
-        {
-            "user_id": "U005",
-            "place_id": "P006",
-            "date": "2026-09-08",
-        },
-        {
-            "user_id": "U006",
-            "place_id": "P007",
-            "date": "2026-09-09",
-        },
-        {
-            "user_id": "U007",
-            "place_id": "P008",
-            "date": "2026-09-10",
-        },
-        {
-            "user_id": "U008",
-            "place_id": "P009",
-            "date": "2026-09-11",
-        },
-        {
-            "user_id": "U009",
-            "place_id": "P010",
-            "date": "2026-09-12",
-        },
-        {
-            "user_id": "U010",
-            "place_id": "P001",
-            "date": "2026-09-13",
-        },
-    ]
 
     query(
         """
-        UNWIND $visited AS row
-
-        MATCH
-            (u:User {
-                user_id: row.user_id
-            }),
-            (p:Place {
-                place_id: row.place_id
-            })
-
+        UNWIND $visits AS item
+        MATCH (u:User {user_id:item[0]})
+        MATCH (p:Place {place_id:item[1]})
         MERGE (u)-[r:VISITED]->(p)
-
-        SET r.visit_date = date(row.date)
+        SET r.visit_date = date(item[2])
         """,
-        {
-            "visited": visited
-        },
+        {"visits": [list(x) for x in visits]},
         write=True,
     )
 
 
-# =========================================================
-# Users
-# =========================================================
-
-def get_users():
-
+def get_users() -> list[dict[str, Any]]:
     return query(
         """
         MATCH (u:User)
-
-        RETURN
-            u.user_id AS user_id,
-            u.name AS name
-
+        RETURN u.user_id AS user_id, u.name AS name
         ORDER BY u.user_id
         """
     )
 
 
-def find_user(user_id: str):
-
+def get_profile(user_id: str) -> dict[str, Any] | None:
     rows = query(
         """
-        MATCH (u:User {
-            user_id: $user_id
-        })
-
-        RETURN
-            u.user_id AS user_id,
-            u.name AS name
+        MATCH (u:User {user_id:$user_id})
+        OPTIONAL MATCH (u)-[:FRIEND_OF]-(friend:User)
+        WITH u, count(DISTINCT friend) AS friend_count
+        OPTIONAL MATCH (u)-[:VISITED]->(p:Place)
+        RETURN u.user_id AS user_id,
+               u.name AS name,
+               friend_count,
+               count(DISTINCT p) AS visit_count
         """,
-        {
-            "user_id": user_id
-        },
+        {"user_id": user_id},
     )
-
     return rows[0] if rows else None
 
 
-# =========================================================
-# User Profile
-# =========================================================
+def visited_places(user_id: str) -> list[dict[str, Any]]:
+    return query(
+        """
+        MATCH (u:User {user_id:$user_id})-[v:VISITED]->(p:Place)
+        RETURN p.place_id AS place_id,
+               p.name AS name,
+               toString(v.visit_date) AS visit_date
+        ORDER BY v.visit_date
+        """,
+        {"user_id": user_id},
+    )
 
-def get_profile(user_id: str):
 
+def search_places(keyword: str = "") -> list[dict[str, Any]]:
+    return query(
+        """
+        MATCH (p:Place)
+        WHERE $keyword = ''
+           OR toLower(p.name) CONTAINS toLower($keyword)
+           OR toLower(p.place_id) CONTAINS toLower($keyword)
+        RETURN p.place_id AS place_id,
+               p.name AS name
+        ORDER BY p.place_id
+        """,
+        {"keyword": keyword.strip()},
+    )
+
+
+def recommend_places(user_id: str, limit: int = 5) -> list[dict[str, Any]]:
+    return query(
+        """
+        MATCH (me:User {user_id:$user_id})
+        MATCH (me)-[:FRIEND_OF]-(friend:User)-[:VISITED]->(place:Place)
+        WHERE NOT (me)-[:VISITED]->(place)
+        WITH place,
+             count(DISTINCT friend) AS friend_score,
+             collect(DISTINCT friend.name) AS friend_names
+        RETURN place.place_id AS place_id,
+               place.name AS name,
+               friend_score,
+               friend_names
+        ORDER BY friend_score DESC, name
+        LIMIT $limit
+        """,
+        {"user_id": user_id, "limit": int(limit)},
+    )
+
+
+def popular_places(limit: int = 10) -> list[dict[str, Any]]:
+    return query(
+        """
+        MATCH (u:User)-[:VISITED]->(p:Place)
+        RETURN p.place_id AS place_id,
+               p.name AS name,
+               count(DISTINCT u) AS visitors
+        ORDER BY visitors DESC, name
+        LIMIT $limit
+        """,
+        {"limit": int(limit)},
+    )
+
+
+def get_dashboard_metrics() -> dict[str, int]:
     rows = query(
         """
-        MATCH (u:User {
-            user_id: $user_id
-        })
-
-        OPTIONAL MATCH
-            (u)-[:VISITED]->(p:Place)
-
-        RETURN
-            u.user_id AS user_id,
-            u.name AS name,
-            collect(
-                DISTINCT {
-                    place_id: p.place_id,
-                    place: p.name
-                }
-            ) AS visited
-        """,
-        {
-            "user_id": user_id
-        },
+        OPTIONAL MATCH (u:User)
+        WITH count(u) AS users
+        OPTIONAL MATCH (p:Place)
+        WITH users, count(p) AS places
+        OPTIONAL MATCH ()-[v:VISITED]->()
+        WITH users, places, count(v) AS visits
+        OPTIONAL MATCH ()-[f:FRIEND_OF]->()
+        RETURN users, places, visits, count(f) AS friendships
+        """
     )
 
     if not rows:
-        return None
-
-    profile = rows[0]
-
-    profile["visited"] = [
-        x
-        for x in profile["visited"]
-        if x.get("place_id")
-    ]
-
-    return profile
-
-
-# =========================================================
-# Visited Places
-# =========================================================
-
-def visited_places(user_id: str):
-
-    return query(
-        """
-        MATCH
-            (u:User {
-                user_id: $user_id
-            })
-            -[r:VISITED]->
-            (p:Place)
-
-        RETURN
-            p.place_id AS place_id,
-            p.name AS name,
-            r.visit_date AS visit_date
-
-        ORDER BY visit_date
-        """,
-        {
-            "user_id": user_id
-        },
-    )
-
-
-# =========================================================
-# Search Places
-# =========================================================
-
-def search_places(keyword: str = ""):
-
-    return query(
-        """
-        MATCH (p:Place)
-
-        WHERE
-            $keyword = ""
-            OR
-            toLower(p.name)
-            CONTAINS
-            toLower($keyword)
-
-        RETURN
-            p.place_id AS place_id,
-            p.name AS name
-
-        ORDER BY p.name
-        """,
-        {
-            "keyword": keyword.strip()
-        },
-    )
-
-
-# =========================================================
-# Recommendation
-# =========================================================
-
-def recommend_places(
-    user_id: str,
-    limit: int = 10
-):
-
-    return query(
-        """
-        MATCH
-            (me:User {
-                user_id: $user_id
-            })
-            -[:FRIEND_OF]-
-            (friend:User)
-            -[:VISITED]->
-            (place:Place)
-
-        WHERE NOT EXISTS {
-            MATCH
-                (me)-[:VISITED]->(place)
-        }
-
-        RETURN
-            place.place_id AS place_id,
-            place.name AS recommendation,
-            count(DISTINCT friend) AS friend_score,
-            collect(DISTINCT friend.name) AS friends
-
-        ORDER BY
-            friend_score DESC,
-            recommendation
-
-        LIMIT $limit
-        """,
-        {
-            "user_id": user_id,
-            "limit": int(limit),
-        },
-    )
-
-
-# =========================================================
-# Friend Places
-# =========================================================
-
-def friend_places(user_id: str):
-
-    return query(
-        """
-        MATCH
-            (me:User {
-                user_id: $user_id
-            })
-            -[:FRIEND_OF]-
-            (friend:User)
-            -[:VISITED]->
-            (place:Place)
-
-        RETURN
-            friend.name AS friend,
-            place.name AS place
-
-        ORDER BY
-            friend,
-            place
-        """
-    )
-
-
-# =========================================================
-# Popular Places
-# =========================================================
-
-def popular_places():
-
-    return query(
-        """
-        MATCH
-            (:User)-[:VISITED]->(p:Place)
-
-        RETURN
-            p.place_id AS place_id,
-            p.name AS place,
-            count(*) AS visit_count
-
-        ORDER BY
-            visit_count DESC,
-            place
-        """
-    )
-
-
-# =========================================================
-# Dashboard
-# =========================================================
-
-def get_dashboard_metrics():
-
-    rows = query(
-        """
-        MATCH (u:User)
-        WITH count(u) AS users
-
-        MATCH (p:Place)
-        WITH
-            users,
-            count(p) AS places
-
-        MATCH ()-[v:VISITED]->()
-        WITH
-            users,
-            places,
-            count(v) AS visits
-
-        MATCH ()-[f:FRIEND_OF]->()
-
-        RETURN
-            users,
-            places,
-            visits,
-            count(f) AS friendships
-        """
-    )
-
-    if rows:
-        return rows[0]
+        return {"users": 0, "places": 0, "visits": 0, "friendships": 0}
 
     return {
-        "users": 0,
-        "places": 0,
-        "visits": 0,
-        "friendships": 0,
+        "users": int(rows[0]["users"]),
+        "places": int(rows[0]["places"]),
+        "visits": int(rows[0]["visits"]),
+        "friendships": int(rows[0]["friendships"]),
     }
 
 
-# =========================================================
-# Graph Explorer
-# =========================================================
-
-def graph_neighborhood(
-    user_id: str,
-    limit: int = 50
-):
-
+def graph_neighborhood(user_id: str, limit: int = 40) -> list[dict[str, Any]]:
     return query(
         """
-        MATCH
-            (u:User {
-                user_id: $user_id
-            })
-            -[r]-
-            (n)
-
-        RETURN
-            u.user_id AS source_id,
-            "User" AS source_label,
-            u.name AS source_name,
-
-            elementId(n) AS target_id,
-            labels(n)[0] AS target_label,
-
-            CASE
-                WHEN n:User THEN n.name
-                WHEN n:Place THEN n.name
-                ELSE toString(n)
-            END AS target_name,
-
-            type(r) AS relationship
-
+        MATCH (u:User {user_id:$user_id})-[r]-(n)
+        WHERE n:User OR n:Place
+        RETURN u.user_id AS source_id,
+               'User' AS source_label,
+               u.name AS source_name,
+               CASE
+                 WHEN n:User THEN n.user_id
+                 WHEN n:Place THEN n.place_id
+               END AS target_id,
+               CASE
+                 WHEN n:User THEN 'User'
+                 WHEN n:Place THEN 'Place'
+               END AS target_label,
+               n.name AS target_name,
+               type(r) AS relationship
         LIMIT $limit
         """,
-        {
-            "user_id": user_id,
-            "limit": int(limit),
-        },
+        {"user_id": user_id, "limit": int(limit)},
     )
 
 
-# =========================================================
-# Add Visit
-# =========================================================
-
-def add_visit(
-    user_id: str,
-    place_id: str,
-    visit_date: str,
-):
-
+def add_visit(user_id: str, place_id: str, visit_date: str) -> None:
     query(
         """
-        MATCH
-            (u:User {
-                user_id: $user_id
-            }),
-            (p:Place {
-                place_id: $place_id
-            })
-
-        MERGE
-            (u)-[r:VISITED]->(p)
-
-        SET
-            r.visit_date = date($visit_date)
+        MATCH (u:User {user_id:$user_id})
+        MATCH (p:Place {place_id:$place_id})
+        MERGE (u)-[r:VISITED]->(p)
+        SET r.visit_date = date($visit_date)
         """,
         {
             "user_id": user_id,
