@@ -17,7 +17,7 @@ st.set_page_config(
     page_title="Travel Graph",
     page_icon="🌍",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 st.markdown(r'''
@@ -28,10 +28,45 @@ st.markdown(r'''
 .stApp { background:#fff; color:#111; }
 .block-container { max-width:1400px; padding:0 2.4rem 4rem; }
 
-/* Sidebar */
-[data-testid="stSidebar"] { background:#0a0a0c; }
-[data-testid="stSidebar"] * { color:#fff !important; }
-[data-testid="stSidebar"] .stRadio label { padding:.55rem 0; border-bottom:1px solid rgba(255,255,255,.10); }
+/* Hide sidebar: navigation is moved to the top */
+[data-testid="stSidebar"] { display:none; }
+section[data-testid="stSidebar"] { width:0 !important; }
+
+/* Top navigation tabs */
+.nav-tabs {
+    margin:0 -2.4rem 1.8rem;
+    padding:0 2.4rem;
+    border-bottom:1px solid #111;
+}
+.nav-tabs [data-testid="stRadio"] > div {
+    gap:0 !important;
+}
+.nav-tabs [role="radiogroup"] {
+    display:flex !important;
+    flex-wrap:wrap;
+    gap:0 !important;
+}
+.nav-tabs [role="radio"] {
+    border-radius:0 !important;
+    padding:1rem 1.15rem !important;
+    min-height:46px;
+    border-bottom:3px solid transparent;
+    color:#111 !important;
+    font-size:.78rem !important;
+    font-weight:800 !important;
+    letter-spacing:.03em;
+    transition:.15s ease;
+}
+.nav-tabs [role="radio"]:hover {
+    color:#1755ff !important;
+    background:#f5f6f8;
+}
+.nav-tabs [role="radio"][aria-checked="true"] {
+    color:#1755ff !important;
+    border-bottom-color:#1755ff;
+    background:#f5f6f8;
+}
+.nav-tabs [data-testid="stMarkdownContainer"] p { margin:0 !important; }
 
 /* Editorial masthead */
 .masthead {
@@ -161,15 +196,20 @@ st.markdown('''
 </div>
 ''', unsafe_allow_html=True)
 
-# Sidebar
-st.sidebar.markdown("# 🌍 TRAVEL GRAPH")
-st.sidebar.caption("Neo4j Aura · Streamlit")
-page = st.sidebar.radio(
-    "MENU",
-    ["Dashboard", "Recommendations", "Place Search", "Visited Places", "Graph Explorer", "Popular Places", "Admin / Setup"],
+# Navigation moved from the left sidebar to a horizontal tab bar
+PAGES = [
+    "Dashboard", "Recommendations", "Place Search", "Visited Places",
+    "Graph Explorer", "Popular Places", "Admin / Setup"
+]
+st.markdown('<div class="nav-tabs">', unsafe_allow_html=True)
+page = st.radio(
+    "Navigation",
+    PAGES,
+    horizontal=True,
+    label_visibility="collapsed",
+    key="top_navigation",
 )
-st.sidebar.markdown("---")
-st.sidebar.caption("USER → FRIEND_OF → USER → VISITED → PLACE")
+st.markdown('</div>', unsafe_allow_html=True)
 
 # Dashboard
 if page == "Dashboard":
