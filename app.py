@@ -216,8 +216,8 @@ with st.sidebar:
 st.markdown(
     """
     <div class="hero">
-      <div class="hero-kicker">Neo4j Aura · Graph Intelligence</div>
-      <h1>🌍 Travel Graph<br>Recommendation System</h1>
+      <div class="hero-kicker">ระบบ · Intelligence</div>
+      <h1>🌍 Travel <br>Recommendation System</h1>
       <p>ค้นพบสถานที่ใหม่จากความสัมพันธ์ของผู้ใช้ เพื่อน และประวัติการเดินทาง</p>
       <div class="hero-badges">
         <span class="badge">👤 User Graph</span>
