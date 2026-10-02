@@ -233,7 +233,7 @@ st.markdown(
 
 if page == "Dashboard":
     m = get_dashboard_metrics()
-    st.markdown('<div class="section"><div><h2>📊 ภาพรวมระบบ</h2><p>ภาพรวมข้อมูลและโครงสร้าง Travel Graph</p></div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section"><div><h2>📊 ภาพรวมระบบ</h2><p>ภาพรวมข้อมูลและโครงสร้าง Travel </p></div></div>', unsafe_allow_html=True)
     cols = st.columns(4)
     stats = [("USERS", m["users"], "👤", "ผู้ใช้งานใน Graph"), ("PLACES", m["places"], "📍", "สถานที่ท่องเที่ยว"), ("VISITED", m["visits"], "🧭", "ประวัติการเดินทาง"), ("FRIENDSHIPS", m["friendships"], "🤝", "ความสัมพันธ์เพื่อน")]
     for col, (label, value, icon, note) in zip(cols, stats):
@@ -324,17 +324,17 @@ elif page == "Popular Places":
     else: st.info("ยังไม่มีข้อมูล")
 
 elif page == "Admin / Setup":
-    st.markdown('<div class="section"><div><h2>⚙️ Graph Control Center</h2><p>จัดการและตรวจสอบ Travel </p></div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section"><div><h2>⚙️  Control Center</h2><p>จัดการและตรวจสอบ Travel </p></div></div>', unsafe_allow_html=True)
     m = get_dashboard_metrics()
     cols = st.columns(4)
     for col, (label, value) in zip(cols, [("Users",m["users"]),("Places",m["places"]),("Visited",m["visits"]),("Friendships",m["friendships"])]) : col.metric(label, value)
     st.divider()
-    st.markdown('<div class="schema"><b>Current Graph Schema</b><div class="schema-row"><span class="node-pill">User</span><span class="edge-pill">FRIEND_OF</span><span class="node-pill">User</span></div><div class="schema-row"><span class="node-pill">User</span><span class="edge-pill">VISITED</span><span class="node-pill">Place</span></div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="schema"><b>Current  Schema</b><div class="schema-row"><span class="node-pill">User</span><span class="edge-pill">FRIEND_OF</span><span class="node-pill">User</span></div><div class="schema-row"><span class="node-pill">User</span><span class="edge-pill">VISITED</span><span class="node-pill">Place</span></div></div>', unsafe_allow_html=True)
     st.write("")
-    if st.button("🔄 สร้าง / อัปเดต Travel Graph จากข้อมูล Colab", type="primary", use_container_width=True):
+    if st.button("🔄 สร้าง / อัปเดต Travel  จากข้อมูล Colab", type="primary", use_container_width=True):
         with st.spinner("กำลังสร้าง User, Place และ Relationships..."):
             seed_data()
-        st.success("สร้างข้อมูล Travel Graph เรียบร้อยแล้ว")
+        st.success("สร้างข้อมูล Travel ph เรียบร้อยแล้ว")
         st.rerun()
     st.caption("ใช้ MERGE จึงไม่สร้าง node ซ้ำจาก User ID / Place ID")
     st.success("🟢 Neo4j Aura เชื่อมต่อสำเร็จ")
