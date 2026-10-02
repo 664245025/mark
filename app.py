@@ -6,14 +6,20 @@ import pandas as pd
 import streamlit as st
 
 from neo4j_service import (
+    add_friendship,
+    add_place,
     add_visit,
+    delete_place,
     get_dashboard_metrics,
     get_profile,
     get_users,
     graph_neighborhood,
+    list_friendships,
     ping,
     popular_places,
     recommend_places,
+    remove_friendship,
+    remove_visit,
     search_places,
     seed_data,
     visited_places,
@@ -209,7 +215,20 @@ if metrics["users"] == 0 and metrics["places"] == 0:
 
 with st.sidebar:
     st.markdown('<div class="brand"><div class="brand-title">🌍 Travel </div><div class="brand-sub">ระบบ ·</div></div>', unsafe_allow_html=True)
-    page = st.radio("เมนู", ["Dashboard", "Recommendations", "Place Search", "Visited Places", "Graph Explorer", "Popular Places", "Admin / Setup"], label_visibility="visible")
+    page = st.radio(
+        "เมนู",
+        [
+            "Dashboard",
+            "Recommendations",
+            "Place Search",
+            "Visited Places",
+            "Graph Explorer",
+            "Popular Places",
+            "Manage Data",
+            "Admin / Setup",
+        ],
+        label_visibility="visible",
+    )
     st.divider()
     st.markdown('<div class="brand-sub">USER → FRIEND_OF → USER<br>USER → VISITED → PLACE</div>', unsafe_allow_html=True)
 
@@ -274,8 +293,10 @@ elif page == "Recommendations":
             with st.container(border=True):
                 st.markdown(f'<span class="rank">#{i} · {row["friend_score"]} FRIEND CONNECTIONS</span><div class="place-title">📍 {row["name"]}</div><div class="place-id">{row["place_id"]}</div>', unsafe_allow_html=True)
                 c1, c2 = st.columns(2)
-                with c1: st.metric("👥 เพื่อนที่เคยไป", row["friend_score"])
-                with c2: st.metric("สถานะของคุณ", "ยังไม่เคยไป")
+                with c1:
+                    st.metric("👥 เพื่อนที่เคยไป", row["friend_score"])
+                with c2:
+                    st.metric("สถานะของคุณ", "ยังไม่เคยไป")
                 st.markdown(f'<div class="path"><span class="node">👤 {user_id}</span> <span class="edge">→ FRIEND_OF →</span> <span class="node">👥 {friend_text}</span><br><span class="edge">→ VISITED →</span> <span class="node">📍 {row["name"]}</span></div>', unsafe_allow_html=True)
                 if st.button("🔎 ดู Graph ความสัมพันธ์", key=f"view_graph_{user_id}_{row['place_id']}"):
                     st.graphviz_chart(relationship_graph(user_id, row["place_id"]), use_container_width=True)
@@ -285,15 +306,19 @@ elif page == "Place Search":
     keyword = st.text_input("ค้นหา", placeholder="เช่น Wat, Khao, P001", label_visibility="collapsed")
     rows = search_places(keyword)
     st.caption(f"พบ {len(rows)} สถานที่")
-    if rows: st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-    else: st.info("ไม่พบสถานที่")
+    if rows:
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    else:
+        st.info("ไม่พบสถานที่")
 
 elif page == "Visited Places":
     st.markdown('<div class="section"><div><h2>🗺️ Travel History</h2><p>ประวัติสถานที่ที่ผู้ใช้เคยไป</p></div></div>', unsafe_allow_html=True)
     user_id = user_selector("visited_user")
     rows = visited_places(user_id)
-    if rows: st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-    else: st.info("ยังไม่มีประวัติการเดินทาง")
+    if rows:
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    else:
+        st.info("ยังไม่มีประวัติการเดินทาง")
     with st.expander("➕ เพิ่มประวัติการไปสถานที่"):
         places = search_places()
         if places:
@@ -310,24 +335,121 @@ elif page == "Graph Explorer":
     user_id = user_selector("graph_user")
     st.graphviz_chart(relationship_graph(user_id), use_container_width=True)
     c1, c2 = st.columns(2)
-    with c1: st.info("🤝 FRIEND_OF — ความสัมพันธ์ระหว่างผู้ใช้")
-    with c2: st.info("📍 VISITED — ประวัติการไปสถานที่")
+    with c1:
+        st.info("🤝 FRIEND_OF — ความสัมพันธ์ระหว่างผู้ใช้")
+    with c2:
+        st.info("📍 VISITED — ประวัติการไปสถานที่")
     rows = graph_neighborhood(user_id)
     if rows:
-        with st.expander("ดูข้อมูล Relationship แบบตาราง"): st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        with st.expander("ดูข้อมูล Relationship แบบตาราง"):
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
 elif page == "Popular Places":
     st.markdown('<div class="section"><div><h2>🔥 Popular Places</h2><p>สถานที่ที่มีผู้ใช้ไปเยือนมากที่สุด</p></div></div>', unsafe_allow_html=True)
     limit = st.slider("จำนวนสถานที่", 5, 10, 10)
     rows = popular_places(limit)
-    if rows: st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-    else: st.info("ยังไม่มีข้อมูล")
+    if rows:
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    else:
+        st.info("ยังไม่มีข้อมูล")
+
+elif page == "Manage Data":
+    st.markdown('<div class="section"><div><h2>🛠️ Manage Data</h2><p>เพิ่ม / ลบ สถานที่และความสัมพันธ์</p></div></div>', unsafe_allow_html=True)
+    tab_place, tab_friend, tab_visit = st.tabs(["📍 สถานที่", "🤝 เพื่อน (FRIEND_OF)", "🧭 VISITED"])
+
+    # ---------- สถานที่ ----------
+    with tab_place:
+        st.subheader("เพิ่มสถานที่")
+        c1, c2 = st.columns(2)
+        new_pid = c1.text_input("Place ID", placeholder="เช่น P011")
+        new_name = c2.text_input("ชื่อสถานที่", placeholder="เช่น Wat Phra Pathom Chedi")
+        if st.button("➕ เพิ่มสถานที่", type="primary"):
+            if new_pid.strip() and new_name.strip():
+                add_place(new_pid, new_name)
+                st.success(f"เพิ่ม {new_name} แล้ว")
+                st.rerun()
+            else:
+                st.warning("กรอก Place ID และชื่อให้ครบ")
+
+        st.divider()
+        st.subheader("ลบสถานที่")
+        places = search_places()
+        if places:
+            labels = {f"{p['place_id']} — {p['name']}": p["place_id"] for p in places}
+            sel = st.selectbox("เลือกสถานที่ที่จะลบ", list(labels), key="del_place_sel")
+            ok = st.checkbox("ยืนยัน: ลบสถานที่นี้และประวัติ VISITED ที่เกี่ยวข้องทั้งหมด", key="del_place_ok")
+            if st.button("🗑️ ลบสถานที่", disabled=not ok):
+                delete_place(labels[sel])
+                st.success("ลบเรียบร้อย")
+                st.rerun()
+        else:
+            st.info("ยังไม่มีสถานที่")
+
+    # ---------- เพื่อน ----------
+    with tab_friend:
+        users = get_users()
+        ulabels = {f"{u['user_id']} — {u['name']}": u["user_id"] for u in users}
+        st.subheader("เพิ่มความสัมพันธ์เพื่อน")
+        c1, c2 = st.columns(2)
+        a = c1.selectbox("ผู้ใช้ A", list(ulabels), key="fr_a")
+        b = c2.selectbox("ผู้ใช้ B", list(ulabels), index=min(1, len(ulabels) - 1), key="fr_b")
+        if st.button("🤝 เพิ่มเป็นเพื่อน", type="primary"):
+            if add_friendship(ulabels[a], ulabels[b]):
+                st.success("เพิ่มความสัมพันธ์แล้ว")
+                st.rerun()
+            else:
+                st.warning("เป็นเพื่อนกันอยู่แล้ว หรือเลือกผู้ใช้คนเดียวกัน")
+
+        st.divider()
+        st.subheader("ลบความสัมพันธ์เพื่อน")
+        fr = list_friendships()
+        if fr:
+            flabels = {
+                f"{r['name_a']} ({r['user_a']})  ↔  {r['name_b']} ({r['user_b']})": (r["user_a"], r["user_b"])
+                for r in fr
+            }
+            fsel = st.selectbox("เลือกความสัมพันธ์", list(flabels), key="del_fr_sel")
+            if st.button("🗑️ ลบความสัมพันธ์"):
+                remove_friendship(*flabels[fsel])
+                st.success("ลบเรียบร้อย")
+                st.rerun()
+        else:
+            st.info("ยังไม่มีความสัมพันธ์เพื่อน")
+
+    # ---------- VISITED ----------
+    with tab_visit:
+        uid = user_selector("manage_visit_user")
+        st.subheader("เพิ่มประวัติการไป")
+        places = search_places()
+        if places:
+            plabels = {f"{p['place_id']} — {p['name']}": p["place_id"] for p in places}
+            psel = st.selectbox("สถานที่", list(plabels), key="add_visit_place")
+            vdate = st.date_input("วันที่ไป", value=date.today(), key="add_visit_date")
+            if st.button("➕ เพิ่ม VISITED", type="primary"):
+                add_visit(uid, plabels[psel], vdate.isoformat())
+                st.success("บันทึกแล้ว")
+                st.rerun()
+
+        st.divider()
+        st.subheader("ลบประวัติการไป")
+        vrows = visited_places(uid)
+        if vrows:
+            st.dataframe(pd.DataFrame(vrows), use_container_width=True, hide_index=True)
+            vlabels = {f"{r['place_id']} — {r['name']}": r["place_id"] for r in vrows}
+            vsel = st.selectbox("เลือกที่จะลบ", list(vlabels), key="del_visit_sel")
+            if st.button("🗑️ ลบ VISITED"):
+                remove_visit(uid, vlabels[vsel])
+                st.success("ลบเรียบร้อย")
+                st.rerun()
+        else:
+            st.info("ผู้ใช้นี้ยังไม่มีประวัติการเดินทาง")
 
 elif page == "Admin / Setup":
     st.markdown('<div class="section"><div><h2>⚙️  Control Center</h2><p>จัดการและตรวจสอบ Travel </p></div></div>', unsafe_allow_html=True)
     m = get_dashboard_metrics()
     cols = st.columns(4)
-    for col, (label, value) in zip(cols, [("Users",m["users"]),("Places",m["places"]),("Visited",m["visits"]),("Friendships",m["friendships"])]) : col.metric(label, value)
+    for col, (label, value) in zip(cols, [("Users", m["users"]), ("Places", m["places"]), ("Visited", m["visits"]), ("Friendships", m["friendships"])]):
+        col.metric(label, value)
     st.divider()
     st.markdown('<div class="schema"><b>Current  Schema</b><div class="schema-row"><span class="node-pill">User</span><span class="edge-pill">FRIEND_OF</span><span class="node-pill">User</span></div><div class="schema-row"><span class="node-pill">User</span><span class="edge-pill">VISITED</span><span class="node-pill">Place</span></div></div>', unsafe_allow_html=True)
     st.write("")
