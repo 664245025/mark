@@ -20,7 +20,7 @@ from neo4j_service import (
 )
 
 st.set_page_config(
-    page_title="Travel Graph",
+    page_title="Travel ",
     page_icon="🌍",
     layout="wide",
     initial_sidebar_state="expanded",
