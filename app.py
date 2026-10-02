@@ -208,7 +208,7 @@ if metrics["users"] == 0 and metrics["places"] == 0:
     metrics = get_dashboard_metrics()
 
 with st.sidebar:
-    st.markdown('<div class="brand"><div class="brand-title">🌍 Travel </div><div class="brand-sub">Neo4j Aura · Graph Intelligence</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="brand"><div class="brand-title">🌍 Travel </div><div class="brand-sub">ระบบ ·</div></div>', unsafe_allow_html=True)
     page = st.radio("เมนู", ["Dashboard", "Recommendations", "Place Search", "Visited Places", "Graph Explorer", "Popular Places", "Admin / Setup"], label_visibility="visible")
     st.divider()
     st.markdown('<div class="brand-sub">USER → FRIEND_OF → USER<br>USER → VISITED → PLACE</div>', unsafe_allow_html=True)
