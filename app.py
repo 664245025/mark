@@ -208,7 +208,7 @@ if metrics["users"] == 0 and metrics["places"] == 0:
     metrics = get_dashboard_metrics()
 
 with st.sidebar:
-    st.markdown('<div class="brand"><div class="brand-title">🌍 Travel Graph</div><div class="brand-sub">Neo4j Aura · Graph Intelligence</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="brand"><div class="brand-title">🌍 Travel </div><div class="brand-sub">Neo4j Aura · Graph Intelligence</div></div>', unsafe_allow_html=True)
     page = st.radio("เมนู", ["Dashboard", "Recommendations", "Place Search", "Visited Places", "Graph Explorer", "Popular Places", "Admin / Setup"], label_visibility="visible")
     st.divider()
     st.markdown('<div class="brand-sub">USER → FRIEND_OF → USER<br>USER → VISITED → PLACE</div>', unsafe_allow_html=True)
@@ -324,7 +324,7 @@ elif page == "Popular Places":
     else: st.info("ยังไม่มีข้อมูล")
 
 elif page == "Admin / Setup":
-    st.markdown('<div class="section"><div><h2>⚙️ Graph Control Center</h2><p>จัดการและตรวจสอบ Travel Graph</p></div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section"><div><h2>⚙️ Graph Control Center</h2><p>จัดการและตรวจสอบ Travel </p></div></div>', unsafe_allow_html=True)
     m = get_dashboard_metrics()
     cols = st.columns(4)
     for col, (label, value) in zip(cols, [("Users",m["users"]),("Places",m["places"]),("Visited",m["visits"]),("Friendships",m["friendships"])]) : col.metric(label, value)
@@ -339,4 +339,4 @@ elif page == "Admin / Setup":
     st.caption("ใช้ MERGE จึงไม่สร้าง node ซ้ำจาก User ID / Place ID")
     st.success("🟢 Neo4j Aura เชื่อมต่อสำเร็จ")
 
-st.markdown('<div class="footer">Travel Graph Recommendation · Neo4j Aura + Streamlit · User → FRIEND_OF → User → VISITED → Place</div>', unsafe_allow_html=True)
+st.markdown('<div class="footer">Travel  Recommendation · Neo4j Aura + Streamlit · User → FRIEND_OF → User → VISITED → Place</div>', unsafe_allow_html=True)
