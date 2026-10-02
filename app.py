@@ -17,18 +17,17 @@ from neo4j_service import (
     search_places,
     seed_data,
     visited_places,
-    query,  # ใช้สำหรับรัน Cypher อิสระ
 )
 
 st.set_page_config(
-    page_title="Travel Recommendation",
+    page_title="Travel ",
     page_icon="🌍",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 # -----------------------------
-# Premium UI Styles
+# Premium UI
 # -----------------------------
 st.markdown(
     """
@@ -143,6 +142,7 @@ def user_selector(key: str = "user") -> str:
 
 
 def relationship_graph(user_id: str, place_id: str | None = None) -> str:
+    from neo4j_service import query
     if place_id:
         rows = query(
             """
@@ -208,7 +208,7 @@ if metrics["users"] == 0 and metrics["places"] == 0:
     metrics = get_dashboard_metrics()
 
 with st.sidebar:
-    st.markdown('<div class="brand"><div class="brand-title">🌍 Travel</div><div class="brand-sub">ระบบแนะนำสถานที่</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="brand"><div class="brand-title">🌍 Travel </div><div class="brand-sub">ระบบ ·</div></div>', unsafe_allow_html=True)
     page = st.radio("เมนู", ["Dashboard", "Recommendations", "Place Search", "Visited Places", "Graph Explorer", "Popular Places", "Admin / Setup"], label_visibility="visible")
     st.divider()
     st.markdown('<div class="brand-sub">USER → FRIEND_OF → USER<br>USER → VISITED → PLACE</div>', unsafe_allow_html=True)
@@ -233,7 +233,7 @@ st.markdown(
 
 if page == "Dashboard":
     m = get_dashboard_metrics()
-    st.markdown('<div class="section"><div><h2>📊 ภาพรวมระบบ</h2><p>ภาพรวมข้อมูลและโครงสร้าง Travel</p></div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section"><div><h2>📊 ภาพรวมระบบ</h2><p>ภาพรวมข้อมูลและโครงสร้าง Travel </p></div></div>', unsafe_allow_html=True)
     cols = st.columns(4)
     stats = [("USERS", m["users"], "👤", "ผู้ใช้งานใน Graph"), ("PLACES", m["places"], "📍", "สถานที่ท่องเที่ยว"), ("VISITED", m["visits"], "🧭", "ประวัติการเดินทาง"), ("FRIENDSHIPS", m["friendships"], "🤝", "ความสัมพันธ์เพื่อน")]
     for col, (label, value, icon, note) in zip(cols, stats):
@@ -306,7 +306,7 @@ elif page == "Visited Places":
                 st.rerun()
 
 elif page == "Graph Explorer":
-    st.markdown('<div class="section"><div><h2>🕸️️ Graph Explorer</h2><p>สำรวจความสัมพันธ์ของ User และ Place แบบภาพ</p></div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section"><div><h2>🕸️ Graph Explorer</h2><p>สำรวจความสัมพันธ์ของ User และ Place แบบภาพ</p></div></div>', unsafe_allow_html=True)
     user_id = user_selector("graph_user")
     st.graphviz_chart(relationship_graph(user_id), use_container_width=True)
     c1, c2 = st.columns(2)
@@ -324,102 +324,19 @@ elif page == "Popular Places":
     else: st.info("ยังไม่มีข้อมูล")
 
 elif page == "Admin / Setup":
-    st.markdown('<div class="section"><div><h2>⚙️ Control Center</h2><p>จัดการและตรวจสอบระบบ Travel</p></div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section"><div><h2>⚙️  Control Center</h2><p>จัดการและตรวจสอบ Travel </p></div></div>', unsafe_allow_html=True)
     m = get_dashboard_metrics()
     cols = st.columns(4)
-    for col, (label, value) in zip(cols, [("Users", m["users"]), ("Places", m["places"]), ("Visited", m["visits"]), ("Friendships", m["friendships"])]):
-        col.metric(label, value)
-    
+    for col, (label, value) in zip(cols, [("Users",m["users"]),("Places",m["places"]),("Visited",m["visits"]),("Friendships",m["friendships"])]) : col.metric(label, value)
     st.divider()
-    
-    # --- ส่วนที่เพิ่มใหม่สำหรับแอดมิน: เพิ่ม/ลบ และรัน Cypher Query ---
-    st.subheader("🛠️ แอดมิน: จัดการข้อมูล & คำสั่งระบบ")
-    admin_tab1, admin_tab2, admin_tab3 = st.tabs(["➕ เพิ่มข้อมูล", "🗑️ ลบข้อมูล", "💻 รันคำสั่ง Cypher"])
-    
-    with admin_tab1:
-        add_type = st.selectbox("เลือกประเภทที่ต้องการเพิ่ม", ["User", "Place", "Friendship (เพื่อน)"])
-        if add_type == "User":
-            new_uid = st.text_input("User ID (เช่น U011)")
-            new_uname = st.text_input("ชื่อผู้ใช้")
-            if st.button("บันทึก User ใหม่", type="primary"):
-                if new_uid and new_uname:
-                    try:
-                        query("MERGE (u:User {user_id: $uid}) SET u.name = $name", {"uid": new_uid, "name": new_uname})
-                        st.success(f"เพิ่มผู้ใช้ {new_uname} ({new_uid}) สำเร็จ!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"เกิดข้อผิดพลาด: {e}")
-                else:
-                    st.warning("กรุณากรอกข้อมูลให้ครบถ้วน")
-        elif add_type == "Place":
-            new_pid = st.text_input("Place ID (เช่น P011)")
-            new_pname = st.text_input("ชื่อสถานที่")
-            if st.button("บันทึก Place ใหม่", type="primary"):
-                if new_pid and new_pname:
-                    try:
-                        query("MERGE (p:Place {place_id: $pid}) SET p.name = $name", {"pid": new_pid, "name": new_pname})
-                        st.success(f"เพิ่มสถานที่ {new_pname} ({new_pid}) สำเร็จ!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"เกิดข้อผิดพลาด: {e}")
-                else:
-                    st.warning("กรุณากรอกข้อมูลให้ครบถ้วน")
-        else:
-            u1 = st.text_input("User ID คนที่ 1 (เช่น U001)")
-            u2 = st.text_input("User ID คนที่ 2 (เช่น U002)")
-            if st.button("สร้างความสัมพันธ์เพื่อน (FRIEND_OF)", type="primary"):
-                if u1 and u2:
-                    try:
-                        query("""
-                            MATCH (a:User {user_id: $u1}), (b:User {user_id: $u2})
-                            MERGE (a)-[:FRIEND_OF]-(b)
-                        """, {"u1": u1, "u2": u2})
-                        st.success(f"เชื่อมความสัมพันธ์ระหว่าง {u1} และ {u2} สำเร็จ!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"เกิดข้อผิดพลาด: {e}")
-                else:
-                    st.warning("กรุณากรอก User ID ทั้งสองคน")
-
-    with admin_tab2:
-        del_type = st.selectbox("เลือกประเภทที่ต้องการลบ", ["User", "Place"])
-        del_id = st.text_input("ระบุ ID ที่ต้องการลบ (เช่น U001 หรือ P001)")
-        if st.button("ยืนยันการลบ", type="secondary"):
-            if del_id:
-                try:
-                    if del_type == "User":
-                        query("MATCH (u:User {user_id: $id}) DETACH DELETE u", {"id": del_id})
-                    else:
-                        query("MATCH (p:Place {place_id: $id}) DETACH DELETE p", {"id": del_id})
-                    st.warning(f"ลบข้อมูล ID: {del_id} เรียบร้อยแล้ว")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"เกิดข้อผิดพลาด: {e}")
-            else:
-                st.warning("กรุณาระบุ ID ที่ต้องการลบ")
-
-    with admin_tab3:
-        st.info("พิมพ์คำสั่ง Cypher Query เพื่อจัดการฐานข้อมูลโดยตรง (สำหรับผู้ดูแลระบบ)")
-        cypher_cmd = st.text_area("Cypher Query", placeholder="MATCH (n) RETURN n LIMIT 10")
-        if st.button("รันคำสั่ง Cypher"):
-            try:
-                res = query(cypher_cmd)
-                st.success("รันคำสั่งสำเร็จ!")
-                if res:
-                    st.dataframe(pd.DataFrame(res), use_container_width=True)
-                else:
-                    st.info("คำสั่งทำงานสำเร็จแต่ไม่มีข้อมูลส่งกลับ (หรือไม่มีผลลัพธ์)")
-            except Exception as e:
-                st.error(f"เกิดข้อผิดพลาด: {e}")
-
-    st.divider()
-    if st.button("🔄 สร้าง / อัปเดต Travel จากข้อมูล Colab", type="primary", use_container_width=True):
+    st.markdown('<div class="schema"><b>Current  Schema</b><div class="schema-row"><span class="node-pill">User</span><span class="edge-pill">FRIEND_OF</span><span class="node-pill">User</span></div><div class="schema-row"><span class="node-pill">User</span><span class="edge-pill">VISITED</span><span class="node-pill">Place</span></div></div>', unsafe_allow_html=True)
+    st.write("")
+    if st.button("🔄 สร้าง / อัปเดต Travel  จากข้อมูล Colab", type="primary", use_container_width=True):
         with st.spinner("กำลังสร้าง User, Place และ Relationships..."):
             seed_data()
-        st.success("สร้างข้อมูล Travel เรียบร้อยแล้ว")
+        st.success("สร้างข้อมูล Travel ph เรียบร้อยแล้ว")
         st.rerun()
-        
     st.caption("ใช้ MERGE จึงไม่สร้าง node ซ้ำจาก User ID / Place ID")
     st.success("🟢 Neo4j Aura เชื่อมต่อสำเร็จ")
 
-st.markdown('<div class="footer">Travel Recommendation · Neo4j Aura + Streamlit · User → FRIEND_OF → User → VISITED → Place</div>', unsafe_allow_html=True)
+st.markdown('<div class="footer">Travel  Recommendation · Neo4j Aura + Streamlit · User → FRIEND_OF → User → VISITED → Place</div>', unsafe_allow_html=True)
